@@ -1,5 +1,4 @@
 import { calibrationTile, whiteCoupons } from "./solid-color.js";
-import { COLOR_EXPORT_CELL_LIMIT } from "./geometry.js";
 import { exportArchive } from "./export-archive.js";
 import { colorLayout } from "./color-layout.js";
 import { supportNotes } from "./supports.js";
@@ -94,10 +93,6 @@ self.onmessage = async ({ data: d }) => {
       reply({ bytes, nx, ny }, [bytes.buffer]);
       return;
     }
-    if (nx * ny > (d.preview ? 16000000 : COLOR_EXPORT_CELL_LIMIT))
-      throw new Error(
-        "Color export exceeds 4,000,000 cells. Increase sample spacing or reduce dimensions.",
-      );
     if (d.mode === "chromaphane")
       throw new Error(
         "Filament painting is Work in progress and paused for this version.",
@@ -255,6 +250,12 @@ self.onmessage = async ({ data: d }) => {
       reply({ bytes, nx, ny }, [bytes.buffer]);
     }
   } catch (error) {
-    reply({ error: error.message });
+    reply({
+      error:
+        error instanceof RangeError
+          ? "This color job exceeded available memory or a platform buffer capacity. No detail was reduced. " +
+            error.message
+          : error.message,
+    });
   }
 };

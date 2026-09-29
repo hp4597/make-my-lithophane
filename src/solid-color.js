@@ -46,6 +46,10 @@ function palette(s, c) {
 }
 function box(builder, x0, x1, y0, y1, z0, z1) {
   if (z1 - z0 < 1e-7) return;
+  if (builder.countOnly) {
+    builder.boxes++;
+    return;
+  }
   const b = builder.p.length / 3;
   builder.p.push(
     x0,
@@ -80,58 +84,80 @@ function box(builder, x0, x1, y0, y1, z0, z1) {
     builder.i.push(b + i);
 }
 export function solidMeshes(plan, s) {
-  const builders = names.map(() => ({ p: [], i: [] })),
-    { cols, rows, counts, config: c } = plan,
+  let builders = names.map(() => ({ countOnly: true, boxes: 0 }));
+  const { cols, rows, counts, config: c } = plan,
     w = s.width,
     h = s.height;
-  box(builders[3], -w / 2, w / 2, -h / 2, h / 2, 0, c.rear * s.layer);
-  box(
-    builders[3],
-    -w / 2,
-    w / 2,
-    -h / 2,
-    h / 2,
-    (c.layers - c.front) * s.layer,
-    c.layers * s.layer,
-  );
-  // Merge identical adjacent columns into closed row prisms. They tile exactly;
-  // the slicer unions touching same-material prisms, without positive-volume overlaps.
-  for (let y = 0; y < rows; y++)
-    for (let x = 0; x < cols;) {
-      let end = x + 1;
-      while (
-        end < cols &&
-        [0, 1, 2, 3].every(
-          (k) =>
-            counts[(y * cols + x) * 4 + k] === counts[(y * cols + end) * 4 + k],
+  function emitBoxes() {
+    box(builders[3], -w / 2, w / 2, -h / 2, h / 2, 0, c.rear * s.layer);
+    box(
+      builders[3],
+      -w / 2,
+      w / 2,
+      -h / 2,
+      h / 2,
+      (c.layers - c.front) * s.layer,
+      c.layers * s.layer,
+    );
+    // Merge identical adjacent columns into closed row prisms. They tile exactly;
+    // the slicer unions touching same-material prisms, without positive-volume overlaps.
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols;) {
+        let end = x + 1;
+        while (
+          end < cols &&
+          [0, 1, 2, 3].every(
+            (k) =>
+              counts[(y * cols + x) * 4 + k] ===
+              counts[(y * cols + end) * 4 + k],
+          )
         )
-      )
-        end++;
-      let z = c.rear;
-      for (let k = 0; k < 4; k++) {
-        const n = counts[(y * cols + x) * 4 + k];
-        box(
-          builders[k],
-          (x / cols - 0.5) * w,
-          (end / cols - 0.5) * w,
-          (y / rows - 0.5) * h,
-          ((y + 1) / rows - 0.5) * h,
-          z * s.layer,
-          (z + n) * s.layer,
-        );
-        z += n;
+          end++;
+        let z = c.rear;
+        for (let k = 0; k < 4; k++) {
+          const n = counts[(y * cols + x) * 4 + k];
+          box(
+            builders[k],
+            (x / cols - 0.5) * w,
+            (end / cols - 0.5) * w,
+            (y / rows - 0.5) * h,
+            ((y + 1) / rows - 0.5) * h,
+            z * s.layer,
+            (z + n) * s.layer,
+          );
+          z += n;
+        }
+        x = end;
       }
-      x = end;
-    }
+  }
+  // Count the merged prisms first, then write directly into exact-sized buffers.
+  // Avoid multi-gigabyte growable JS arrays and their temporary typed-array copies.
+  emitBoxes();
+  if (builders.some((b) => b.boxes * 8 > 0xffffffff))
+    throw new Error(
+      "Smooth color geometry exceeds 32-bit mesh indices. No detail was reduced.",
+    );
+  const buffer = (Type, length) => ({
+    data: new Type(length),
+    length: 0,
+    push(...values) {
+      this.data.set(values, this.length);
+      this.length += values.length;
+    },
+  });
+  builders = builders.map((b) => ({
+    p: buffer(Float32Array, b.boxes * 24),
+    i: buffer(Uint32Array, b.boxes * 36),
+  }));
+  emitBoxes();
   return builders
     .map((b, k) => ({
       name: names[k],
       color: colors[k],
       extruder: k + 1,
       mesh: {
-        positions: new Float32Array(b.p),
-        indices: new Uint32Array(b.i),
-        colors: new Float32Array(b.p.length).fill(1),
+        positions: b.p.data,
+        indices: b.i.data,
       },
     }))
     .filter((p) => p.mesh.indices.length);

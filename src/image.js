@@ -15,6 +15,10 @@ export function sampleImage(image, s, nx, ny, color = false) {
   canvas.width = nx + 1;
   canvas.height = ny + 1;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx)
+    throw new Error(
+      `Unable to allocate a ${nx + 1} x ${ny + 1} image canvas on this device. No detail was reduced.`,
+    );
   ctx.fillStyle = "white";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const rotated = s.rotation % 180 !== 0,

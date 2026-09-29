@@ -23,10 +23,11 @@ export function solidConfig(s) {
     ["solidThickness", 0.8, 4],
     ["solidFront", 0.08, 0.8],
     ["solidRear", 0.08, 0.8],
-    ["solidFeature", 0.2, 2],
   ])
     if (!Number.isFinite(s[key]) || s[key] < min || s[key] > max)
       throw new Error(key + " is out of range.");
+  if (!Number.isFinite(s.solidFeature) || s.solidFeature <= 0)
+    throw new Error("Minimum color feature must be a positive number.");
   const layers = Math.round(s.solidThickness / s.layer),
     front = Math.round(s.solidFront / s.layer),
     rear = Math.round(s.solidRear / s.layer);
@@ -67,9 +68,9 @@ export function solidConfig(s) {
     );
   const cols = Math.max(1, Math.floor(s.width / s.solidFeature)),
     rows = Math.max(1, Math.floor(s.height / s.solidFeature));
-  if (cols * rows > 250000)
+  if (!Number.isSafeInteger(cols * rows))
     throw new Error(
-      "Smooth color grid exceeds 250,000 cells. Increase minimum feature size.",
+      "Requested smooth color grid exceeds numeric precision. No detail was reduced.",
     );
   return {
     layers,

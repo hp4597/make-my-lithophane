@@ -13,8 +13,6 @@ window.renderCLI = async ({ source, settings, format }) => {
   if (settings.colorMode !== "mono")
     throw new Error("CLI requires monochrome mode.");
   const image = await loadImage(source);
-  if (image.width * image.height > 100000000)
-    throw new Error("Image exceeds 100 megapixels.");
   const { nx, ny } = gridSize(settings, false, image),
     pixels = sampleImage(image, settings, nx, ny),
     mesh = buildMesh(settings, pixels, nx, ny);

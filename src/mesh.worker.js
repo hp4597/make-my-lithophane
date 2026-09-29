@@ -21,6 +21,13 @@ self.onmessage = ({ data }) => {
         mesh.uvs.buffer,
       ]);
   } catch (error) {
-    self.postMessage({ id: data.id, error: error.message });
+    self.postMessage({
+      id: data.id,
+      error:
+        error instanceof RangeError
+          ? "This mesh exceeded available memory or a platform buffer capacity. No detail was reduced. " +
+            error.message
+          : error.message,
+    });
   }
 };

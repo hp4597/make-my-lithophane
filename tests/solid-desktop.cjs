@@ -87,9 +87,52 @@ const { _electron: electron } = require("@playwright/test"),
         "Settings need attention",
     );
     assert.match(await page.locator("#toast").textContent(), /multiples/);
+    assert.equal(
+      await page.locator("#viewport").getAttribute("data-preview-state"),
+      "error",
+    );
+    assert.equal(await page.locator("#viewport canvas").isVisible(), false);
+    assert.equal(await page.locator("#model-size").textContent(), "—");
     await update(() =>
       page.locator('[data-setting="solidFront"]').fill("0.16"),
     );
+    assert.equal(await page.locator("#viewport canvas").isVisible(), true);
+    await page.locator('[data-tab="model"]').click();
+    await update(() => page.locator('[data-setting="width"]').fill("480"));
+    await update(() => page.locator('[data-setting="height"]').fill("360"));
+    assert.match(
+      await page.locator("#export-spacing").textContent(),
+      /1200 x 900 cells/,
+    );
+    assert.match(
+      await page.locator("#model-size").textContent(),
+      /480.0 × 360.0 × 2.4/,
+    );
+    await page.screenshot({ path: "test-results/large-solid-panel.png" });
+    const largeOutput = path.resolve("test-results/large-solid-panel.3mf");
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, largeOutput);
+    await page.locator("#export-3mf").click();
+    await page.waitForFunction(
+      () => document.querySelector("#status").textContent === "Export complete",
+      null,
+      { timeout: 180000 },
+    );
+    const largeFiles = unzipSync(await fs.readFile(largeOutput));
+    const largeXml = strFromU8(largeFiles["3D/3dmodel.model"]);
+    assert.ok(
+      largeXml.includes('x="240.00000"') && largeXml.includes('y="180.00000"'),
+    );
+    assert.ok(largeXml.includes('name="White"'));
+    await update(() => page.locator('[data-setting="height"]').fill("180"));
+    await update(() => page.locator('[data-setting="width"]').fill("900"));
+    assert.match(
+      await page.locator("#model-size").textContent(),
+      /900.0 × 180.0 × 2.4/,
+    );
+    await page.locator('[data-tab="print"]').click();
+    await update(() => page.locator("#small-solid").click());
     await update(() =>
       page.locator('[data-setting="colorStructure"]').selectOption("relief"),
     );

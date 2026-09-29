@@ -1,4 +1,5 @@
 import { Zip, ZipDeflate, strToU8 } from "fflate";
+import { checkZipSize } from "./export-archive.js";
 const xmlEscape = (s) =>
   String(s)
     .replaceAll("&", "&amp;")
@@ -7,14 +8,25 @@ const xmlEscape = (s) =>
     .replaceAll(">", "&gt;");
 export function threeMF(parts, title = "Lithophane", options = {}) {
   const chunks = [];
-  let failure;
+  let failure,
+    total = 0,
+    modelSize = 0;
   const zip = new Zip((error, data) => {
     if (error) failure = error;
-    else chunks.push(data);
+    else {
+      total += data.length;
+      checkZipSize(total);
+      chunks.push(data);
+    }
   });
   const modelFile = new ZipDeflate("3D/3dmodel.model", { level: 3 });
   zip.add(modelFile);
-  const emit = (text) => modelFile.push(strToU8(text), false);
+  const emit = (text) => {
+    const bytes = strToU8(text);
+    modelSize += bytes.length;
+    checkZipSize(modelSize);
+    modelFile.push(bytes, false);
+  };
   emit(
     `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><metadata name="Application">Make My Lithophane</metadata><metadata name="Designer">Make My Lithophane</metadata><metadata name="Title">${xmlEscape(title)}</metadata><resources><basematerials id="1">`,
   );

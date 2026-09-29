@@ -15,9 +15,13 @@ test("Native grids match every source pixel and rotate axes without changing phy
   const p = gridSize(defaults, true, image);
   assert.ok(p.nx * p.ny <= 600000);
   assert.ok(p.nx > 800);
+  assert.deepEqual(gridSize(defaults, false, { width: 6000, height: 4000 }), {
+    nx: 5999,
+    ny: 3999,
+  });
   assert.throws(
-    () => gridSize(defaults, false, { width: 6000, height: 4000 }),
-    /No downsampling/,
+    () => gridSize(defaults, false, { width: 100000, height: 100000 }),
+    /32-bit/,
   );
 });
 test("Native one-megapixel mesh preserves alternating pixel heights", () => {

@@ -1,13 +1,26 @@
 import { Zip, ZipDeflate } from "fflate";
 import { binarySTL } from "./geometry.js";
 
+// The current ZIP writer uses 32-bit entry sizes and offsets (no ZIP64).
+export function checkZipSize(size) {
+  if (!Number.isSafeInteger(size) || size >= 0xffffffff)
+    throw new Error(
+      "This export exceeds the ZIP/3MF writer's 4 GiB format capacity. No detail was reduced. Export smaller sections or separate files.",
+    );
+}
+
 // Compress each entry immediately; never retain all uncompressed STL files.
 export function exportArchive() {
   const chunks = [];
-  let failure;
+  let failure,
+    total = 0;
   const zip = new Zip((error, data) => {
     if (error) failure = error;
-    else chunks.push(data);
+    else {
+      total += data.length;
+      checkZipSize(total);
+      chunks.push(data);
+    }
   });
   function entry(name) {
     const file = new ZipDeflate(name, { level: 3 });
@@ -16,12 +29,14 @@ export function exportArchive() {
   }
   return {
     add(name, bytes) {
+      checkZipSize(bytes.length);
       const file = entry(name);
       for (let i = 0; i < bytes.length; i += 1048576)
         file.push(bytes.subarray(i, i + 1048576), false);
       file.push(new Uint8Array(), true);
     },
     stl(name, mesh) {
+      checkZipSize(84 + (mesh.indices.length / 3) * 50);
       const file = entry(name),
         header = new Uint8Array(84);
       new DataView(header.buffer).setUint32(80, mesh.indices.length / 3, true);

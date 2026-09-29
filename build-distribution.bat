@@ -47,8 +47,8 @@ echo.
 echo Build complete. Files are in:
 echo   "%~dp0release"
 echo.
-echo Run "Make My Lithophane 0.5.0 Portable.exe" without installation.
-echo Run "Make My Lithophane Setup 0.5.0.exe" to install the app.
+echo Run the versioned "Make My Lithophane ... Portable.exe" without installation.
+echo Run the versioned "Make My Lithophane Setup ... .exe" to install the app.
 echo The unpacked app is also in "release\win-unpacked".
 echo Keep the unpacked EXE beside its supporting files.
 echo Batch CLI: "release\win-unpacked\lithophane-cli.cmd --help"

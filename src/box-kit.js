@@ -8,9 +8,7 @@ export async function makeBoxKit(photos, settings, generate, progress) {
     parts = [],
     files = {},
     names = ["front", "right", "back", "left"];
-  // Keep assembly size manageable without silently lowering requested resolution.
-  for (const photo of photos.slice(0, 4))
-    gridSize(s, false, photo.image, 150000);
+  for (const photo of photos.slice(0, 4)) gridSize(s, false, photo.image);
   for (let side = 0; side < 4; side++) {
     progress(`Building light-box wall ${side + 1} of 4…`);
     const result = await generate(s, false, photos[side].image, true),

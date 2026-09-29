@@ -2,7 +2,7 @@
 
 A local Windows desktop studio for turning photos into printable lithophanes. Photos remain on the device; no account or service is required.
 
-Version **0.7.0** adds experimental smooth solid CMYW panels and calibration tiles. The studio also includes live lighting enclosures for flat panels, curved panels, cylinders, lamp shades, night lights and lightboxes, plus CMYW material export for those six shapes. The batch CLI remains available. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
+Version **0.7.1** removes arbitrary panel-size, image-file-size and export-cell ceilings, improves smooth mesh memory use, and hides stale previews after failed updates. Version 0.7.0 added experimental smooth solid CMYW panels and calibration tiles. The studio also includes live lighting enclosures for flat panels, curved panels, cylinders, lamp shades, night lights and lightboxes, plus CMYW material export for those six shapes. The batch CLI remains available. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
 
 ## Run and build
 
@@ -17,8 +17,8 @@ npm start
 
 Double-click **`build-distribution.bat`**. It installs locked dependencies, runs geometry/export tests, and builds both executables in `release/`:
 
-- **`Make My Lithophane 0.7.0 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
-- **`Make My Lithophane Setup 0.7.0.exe`** — Windows installer with installation-folder selection and desktop shortcut.
+- **`Make My Lithophane 0.7.1 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
+- **`Make My Lithophane Setup 0.7.1.exe`** — Windows installer with installation-folder selection and desktop shortcut.
 - **`win-unpacked/Make My Lithophane.exe`** — unpacked app; keep all files in that folder together.
 
 For a terminal or CI run without a final keypress: `build-distribution.bat --no-pause`. Internet is needed for build dependencies, but the resulting app works offline. The script respects an existing `NODE_EXTRA_CA_CERTS`; otherwise it exports Windows' public trusted certificates into a temporary PEM for Node, without disabling TLS verification or changing machine settings.
@@ -68,7 +68,7 @@ No proprietary assets, code, branding or licenses are included. A procedural sam
 ## Known constraints
 
 - Silhouette thresholding bridges point-only contacts by one sample cell. Use the largest-connected-shape option to remove detached islands. Inspect fine bridges in your slicer.
-- Large models at fine spacing use substantial memory; export has a cell budget and never silently reduces requested detail.
+- Large models at fine spacing use substantial memory; exports preserve requested detail and depend on available RAM.
 - Moon texture is procedural. Backlit mode is a visualization, not a filament-calibrated physical simulation.
 - Unsigned local installers may trigger Windows' unknown-publisher prompt.
 
@@ -96,15 +96,15 @@ CMYW kits include a matching support sized from actual combined material thickne
 
 ## Version 0.4: native image detail
 
-New projects default to **Model > Resolution > Match image pixels (native)**. A 1600 x 1200 photo produces a 1600 x 1200 surface sample grid; 90-degree rotation swaps axes. Resizing the physical panel preserves this pixel count. Crop, fit, text and tone edits still apply to the sampled image. Custom spacing supports 0.01-2 mm. Images smaller than five pixels per axis use a minimum five-sample grid to keep shapes valid.
+New projects default to **Model > Resolution > Match image pixels (native)**. A 1600 x 1200 photo produces a 1600 x 1200 surface sample grid; 90-degree rotation swaps axes. Resizing the physical panel preserves this pixel count. Crop, fit, text and tone edits still apply to the sampled image. Custom spacing accepts any positive value. Images smaller than five pixels per axis use a minimum five-sample grid to keep shapes valid.
 
-Backlit 3D uses a native-resolution image texture rather than interpolating colors across a tiny draft mesh. Interactive geometry has a 600,000-cell budget; the viewport and export labels report their dimensions separately. CMYW predictions use native image dimensions, up to 16 million cells, without creating material meshes just for preview.
+Backlit 3D uses a native-resolution image texture rather than interpolating colors across a tiny draft mesh. Interactive geometry has a 600,000-cell budget; the viewport and export labels report their dimensions separately. CMYW predictions use native image dimensions, without creating material meshes just for preview.
 
-**Explicit resource limits:** main exports allow 4 million cells (about 16 million triangles / 800 MB STL); CMYW kits allow 4 million cells across each of their four volumes; four-wall kits allow 150,000 cells per wall. Requests above a limit fail with an explanation and never silently downsample. Choose Custom spacing or a smaller source to fit the limit. GPU texture dimensions are hardware dependent and checked before upload. Native backlit preview does not imply that the printer can reproduce every pixel. Large models require substantial RAM and slicer capacity. ThreeMF XML is compressed in chunks to avoid constructing a huge XML string.
+**Resource requirements (updated in 0.7.1):** fixed export-cell limits have been removed for main, CMYW and four-wall kits. Exports never silently downsample. Actual allocation failures and mesh-format limits can still prevent very large exports. GPU texture dimensions are hardware dependent and checked before upload. Native backlit preview does not imply that the printer can reproduce every pixel. Large models require substantial RAM and slicer capacity. ThreeMF XML is compressed in chunks to avoid constructing a huge XML string.
 
 ## Version 0.5: one live workspace
 
-Color, matching stands/cases, optional hardware and photo layouts now live in the right sidebar. **Color & print** selects white filament, color paper or CMYW and exposes layer height/color depth directly. The existing viewport updates automatically; color selection switches to Backlit. Later edits preserve the current view and camera. CMYW preview uses the total material thickness and predicted transmission, and matching supports follow that thickness. CMYW material exports support the six priority shapes. Filament painting remains disabled.
+Color, matching stands/cases, optional hardware and photo layouts now live in the right sidebar. **Color & print** selects white filament, color paper or CMYW and exposes layer height/color depth directly. The existing viewport updates automatically; color selection switches to Backlit. Later edits preserve the current view; dimension changes refit the camera. CMYW preview uses the total material thickness and predicted transmission, and matching supports follow that thickness. CMYW material exports support the six priority shapes. Filament painting remains disabled.
 
 **Supports** contains automatic matching supports and optional manual hardware dimensions. Enabling hardware displays it beside the photo; it no longer replaces the photo. Enabled hardware joins standard STL/3MF layouts and appears in CMYW kits/layouts. **Photos** contains the library, layout, gap and background controls; edits apply live without an Apply button. File dialogs and the help guide remain dialogs.
 
@@ -127,7 +127,7 @@ Automated checks cover closed meshes, winding, separated layouts, live settings 
 
 ### Native CMYW export fix (0.6.1)
 
-CMYW exports now accept up to 4,000,000 cells, preserving the image grid. The 1672 × 941 image dimensions from the reported failure fit this budget. STL entries are compressed incrementally; material layouts share original mesh buffers and apply placement during 3MF serialization. Target/predicted PNGs and project data are included by the export worker, eliminating a full unzip/repack in the UI. Direct 3MF export skips STL/PNG generation. This reduces temporary memory; large meshes still require substantial RAM and slicer capacity, and the budget remains explicit rather than silently downsampling.
+In 0.6.1, CMYW exports accepted up to 4,000,000 cells, preserving the image grid; 0.7.1 removes that fixed ceiling. The 1672 × 941 image dimensions from the reported failure fit this budget. STL entries are compressed incrementally; material layouts share original mesh buffers and apply placement during 3MF serialization. Target/predicted PNGs and project data are included by the export worker, eliminating a full unzip/repack in the UI. Direct 3MF export skips STL/PNG generation. This reduces temporary memory; large meshes still require substantial RAM and slicer capacity, and exports never silently downsample.
 
 ## Smooth solid color panels — experimental (0.7.0)
 
@@ -141,4 +141,4 @@ Calibration ZIP: a 36-patch, 36 × 36 mm multipart tile; six separate all-white 
 
 CMYW 3MF files now contain Bambu-specific **part names and 1/2/3/4 extruder hints**, with support parts assigned to White. Import/re-export through the installed Bambu Studio preserves those names and hints. Third-party import paths can ignore global process/palette hints. Explicitly configure four filaments, verify their assignments, set 100% infill, use the exported layer height and first-layer height, then inspect the layer preview. The calibration defaults require 0.08 mm layers and a 0.16 mm first layer. These files are models, not ready-to-run G-code or physically validated printer profiles. Exports use standard model import with part metadata; a complete printer profile is not included.
 
-Limits: 64 total layers, at least one layer per skin and three internal layers, 250,000 color cells. Thicknesses must be exact layer multiples. CLI color export remains unavailable; use the desktop CMYW workflow. Run `npm run test:solid` for the live mode/calibration regression.
+Limits: 64 total layers, at least one layer per skin and three internal layers. There is no fixed color-cell or 500 mm dimension ceiling. Native exports preserve requested samples; interactive geometry remains lighter. Actual available RAM, GPU/canvas capabilities, 32-bit mesh indices and file-format constraints still apply; very large jobs can fail or exhaust memory. No automatic print-bed tiling is provided. Thicknesses must be exact layer multiples. CLI color export remains unavailable; use the desktop CMYW workflow. Run `npm run test:solid` for the live mode/calibration regression.

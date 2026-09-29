@@ -78,6 +78,10 @@ export class Preview {
     this.scene.add(this.mesh);
     this.setMode(this.mode || "solid");
     this.grid.position.y = g.boundingBox.min.y - 1;
+    const extent = g.boundingBox.getSize(new THREE.Vector3()).length();
+    this.camera.far = Math.max(10000, extent * 20);
+    this.camera.updateProjectionMatrix();
+    this.grid.scale.setScalar(Math.max(1, extent / 400));
     if (reset) this.reset();
   }
   setMode(mode) {

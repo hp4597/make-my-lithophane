@@ -28,6 +28,26 @@ function photo() {
     }
   return p;
 }
+test("Large smooth grids preserve requested feature pitch without the old cell cap", () => {
+  const s = {
+    ...defaults,
+    colorMode: "cmyw",
+    colorStructure: "solid",
+    width: 480,
+    height: 360,
+  };
+  const c = solidConfig(s);
+  assert.equal(c.cols * c.rows, 1080000);
+  const plan = solidPlan(new Uint8Array(4 * 4 * 4).fill(255), 3, 3, s);
+  assert.equal(plan.counts.length, 1080000 * 4);
+  const parts = solidMeshes(plan, s);
+  assert.equal(parts.length, 1);
+  assert.ok(
+    Math.abs(meshStats(parts[0].mesh).volume * 1000 - 480 * 360 * 2.4) < 0.1,
+  );
+  const larger = solidConfig({ ...s, width: 1200, height: 1200 });
+  assert.equal(larger.cols * larger.rows, 9000000);
+});
 test("Every smooth-panel column is fully occupied, layer aligned, flat and non-overlapping", () => {
   const plan = solidPlan(photo(), 8, 6, s),
     parts = solidMeshes(plan, s),
