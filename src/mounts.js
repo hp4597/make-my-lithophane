@@ -1,3 +1,4 @@
+import { bounds, transform, mergeMeshes } from "./supports.js";
 import { Shape, Path, ExtrudeGeometry } from "three";
 import { binarySTL } from "./geometry.js";
 import { threeMF } from "./three-mf.js";
@@ -142,27 +143,30 @@ export function makeMount(type, p) {
   throw new Error("Unknown mounting part.");
 }
 export function initMounts(api) {
-  const dialog = document.createElement("dialog");
-  dialog.id = "mount-studio";
-  document.body.append(dialog);
+  const panel = document.createElement("section");
+  panel.id = "mount-studio";
+  panel.className = "inline-tool";
+  panel.hidden = true;
+  document.querySelector("#tool-panels").append(panel);
   const button = document.createElement("button");
-  button.className = "guide-button";
   button.id = "mount-open";
-  button.textContent = "Mounts, stands & lamp adapters →";
+  button.className = "guide-button";
+  button.textContent = "Supports & hardware →";
+  button.onclick = () => api.open();
   document.querySelector(".local-note").before(button);
   let type = "spider",
+    enabled = false,
     p = {
-      diameter: 100,
+      diameter: api.getSettings().width,
       socket: 28,
       thickness: 3,
       spoke: 5,
-      slot: 3.6,
+      slot: api.getSettings().max + 0.4,
       depth: 15,
       width: 40,
     };
   function draw() {
-    dialog.innerHTML = `<button class="dialog-close" data-action="close">×</button><span class="eyebrow">HARDWARE WORKSHOP</span><h2>Give your lithophane a home.</h2><label class="field"><span>Part</span><select id="mount-type"><option value="spider">Four-spoke lamp adapter</option><option value="ring">Lamp / sphere mounting ring</option><option value="stand">Slotted display stand</option><option value="clip">U-channel night-light adapter</option></select></label><div class="field-row">${(type ===
-      "ring" || type === "spider"
+    const fields = ["ring", "spider"].includes(type)
       ? [
           ["diameter", "Outer diameter"],
           ["socket", "Socket opening"],
@@ -174,77 +178,108 @@ export function initMounts(api) {
           ["slot", "Slot opening"],
           ["depth", "Slot depth"],
           ["thickness", "Wall thickness"],
-        ]
-    )
+        ];
+    panel.innerHTML = `<div class="panel-title">Optional hardware</div><label class="check"><input id="hardware-enabled" type="checkbox" ${enabled ? "checked" : ""}/>Include hardware beside the model</label><label class="field"><span>Part</span><select id="mount-type">${[
+      ["spider", "Four-spoke lamp adapter"],
+      ["ring", "Mounting ring"],
+      ["stand", "Slotted stand"],
+      ["clip", "U-channel clip"],
+    ]
       .map(
-        ([key, label]) =>
-          `<label class="field"><span>${label} (mm)</span><input type="number" data-mount="${key}" step="0.1" min="0.4" max="500" value="${p[key]}"/></label>`,
+        ([v, t]) =>
+          `<option value="${v}" ${v === type ? "selected" : ""}>${t}</option>`,
       )
       .join(
         "",
-      )}</div><p>These are separate parametric parts. Measure your light fitting and account for printer tolerances. Rings and spoke adapters need a retaining collar or adhesive; they are not automatically attached to the lithophane. U-channel adapters must be matched to your hardware.</p><div class="note">Use low-heat LEDs. Validate fit with a small test before printing the full model. Generic parts have not been physically fit-tested against branded hardware.</div><div class="dialog-actions"><button data-action="preview">Preview part</button><button data-action="export" class="primary">Export STL + 3MF kit</button></div>`;
-    dialog.querySelector("#mount-type").value = type;
+      )}</select></label><div class="field-row">${fields.map(([key, label]) => `<label class="field"><span>${label} (mm)</span><input data-mount="${key}" type="number" step="0.1" min="0.4" max="500" value="${p[key]}"/></label>`).join("")}</div><p class="hint">Edits update alongside your lithophane. Matching supports above resize automatically; these optional hardware dimensions are manual. Generic fittings need physical fit testing.</p><button data-action="export" class="wide">Export hardware kit</button>`;
   }
-  button.onclick = () => {
-    p.slot = api.getSettings().max + 0.4;
-    p.diameter = api.getSettings().width;
-    draw();
-    dialog.showModal();
-  };
-  dialog.onchange = (e) => {
+  const getMesh = () => (enabled ? makeMount(type, p) : null);
+  panel.addEventListener("input", (e) => {
+    if (e.target.dataset.mount) {
+      p[e.target.dataset.mount] = Number(e.target.value);
+      enabled = true;
+      panel.querySelector("#hardware-enabled").checked = true;
+      api.changed();
+    }
+    if (e.target.id === "hardware-enabled") {
+      enabled = e.target.checked;
+      api.changed();
+    }
+  });
+  panel.addEventListener("change", (e) => {
     if (e.target.id === "mount-type") {
       type = e.target.value;
+      enabled = true;
       draw();
+      api.changed();
     }
-    if (e.target.dataset.mount)
-      p[e.target.dataset.mount] = Number(e.target.value);
-  };
-  dialog.onclick = async (e) => {
-    const action = e.target.closest("button")?.dataset.action;
-    if (!action) return;
+  });
+  panel.addEventListener("click", async (e) => {
+    if (e.target.closest("button")?.dataset.action !== "export") return;
     try {
-      if (action === "close") {
-        dialog.close();
-        api.restore();
-        return;
-      }
-      const mesh = makeMount(type, p);
-      if (action === "preview") {
-        api.preview(mesh);
-        dialog.close();
-        api.toast(
-          "Mount preview. Change a model setting or shape to return to your photo.",
-        );
-      }
-      if (action === "export") {
-        const files = {
+      const mesh = makeMount(type, p),
+        files = {
           "mount.stl": binarySTL(mesh),
           "mount.3mf": threeMF([{ name: type, color: "#EEEEEE", mesh }]),
           "dimensions.json": strToU8(JSON.stringify({ type, ...p }, null, 2)),
-          "ASSEMBLY.txt": strToU8(
-            "Separate mounting part. Dimensions are mm. Check fit and tolerances before use. Lamp rings/spiders require a retaining collar or adhesive; this kit does not attach them automatically. For low-heat LED lighting only.",
-          ),
         };
-        if (
-          await api.saveFile(
-            type + "-mount-kit.zip",
-            zipSync(files, { level: 3 }),
-          )
+      if (
+        await api.saveFile(
+          type + "-mount-kit.zip",
+          zipSync(files, { level: 3 }),
         )
-          api.toast("Mount kit saved.");
-      }
-    } catch (err) {
-      api.toast(err.message, true);
+      )
+        api.toast("Mount kit saved.");
+    } catch (e) {
+      api.toast(e.message, true);
     }
-  };
+  });
   return {
-    getState: () => ({ type, p }),
+    show: (visible) => {
+      panel.hidden = !visible;
+      if (visible) draw();
+    },
+    getMesh,
+    compose: (mesh) => {
+      const extra = getMesh();
+      if (!extra) return mesh;
+      const b = bounds(mesh),
+        e = bounds(extra);
+      return mergeMeshes([
+        mesh,
+        transform(extra, (x, y, z) => [
+          x - e.min[0] + b.max[0] + api.getSettings().printGap,
+          z - e.min[2] + b.min[1],
+          -(y - e.min[1]),
+        ]),
+      ]);
+    },
+    printParts: (parts) => {
+      const extra = getMesh();
+      if (!extra) return parts;
+      const right = Math.max(...parts.map((p) => bounds(p.mesh).max[0])),
+        b = bounds(extra);
+      return [
+        ...parts,
+        {
+          name: "Hardware " + type,
+          color: "#9BA99A",
+          mesh: transform(extra, (x, y, z) => [
+            x - b.min[0] + right + api.getSettings().printGap,
+            y - b.min[1],
+            z - b.min[2],
+          ]),
+        },
+      ];
+    },
+    getState: () => ({ type, p, enabled }),
     setState: (s) => {
       if (s) {
         makeMount(s.type, s.p);
         type = s.type;
-        p = s.p;
-      }
+        p = { ...s.p };
+        enabled = !!s.enabled;
+      } else enabled = false;
     },
   };
 }

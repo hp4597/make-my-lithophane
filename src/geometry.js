@@ -32,6 +32,7 @@ export const defaults = {
   layer: 0.08,
   levels: 5,
   colorMode: "mono",
+  colorDepth: 0.64,
   hue: 0,
   saturation: 0,
   waves: 0,
@@ -77,7 +78,11 @@ export function validate(s) {
   if (!shapes.some(([id]) => id === s.shape)) throw new Error("Unknown shape.");
   if (s.width < 20 || s.width > 500 || s.height < 20 || s.height > 500)
     throw new Error("Dimensions must be between 20 and 500 mm.");
-  if (s.min < 0.4 || s.max <= s.min || s.max > 10)
+  if (
+    s.min < (s.colorMode === "cmyw" ? 0.04 : 0.4) ||
+    s.max <= s.min ||
+    s.max > (s.colorMode === "cmyw" ? 20 : 10)
+  )
     throw new Error(
       "Maximum thickness must exceed minimum thickness (0.4–10 mm).",
     );
@@ -116,7 +121,7 @@ export function validate(s) {
   )
     throw new Error("Invalid image or layer settings.");
   if (
-    !["mono", "paper", "painting"].includes(s.colorMode) ||
+    !["mono", "paper", "cmyw", "painting"].includes(s.colorMode) ||
     !["cover", "contain"].includes(s.fit) ||
     ![0, 90, 180, 270].includes(s.rotation)
   )
@@ -146,6 +151,8 @@ export function validate(s) {
     s.holeDiameter > 10
   )
     throw new Error("Invalid color, wave or mounting-hole settings.");
+  if (s.colorMode === "cmyw" && (s.colorDepth < s.layer || s.colorDepth > 1.6))
+    throw new Error("Color depth must be between one layer and 1.6 mm.");
   if (s.holes && s.border < s.holeDiameter + 2)
     throw new Error(
       "Hanging holes need a border at least 2 mm wider than the hole diameter.",

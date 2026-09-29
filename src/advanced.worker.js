@@ -1,9 +1,17 @@
-import { printParts, mergeMeshes, bounds, supportNotes } from "./supports.js";
-import { matchPainting, colorLithophane } from "./color.js";
+import {
+  printParts,
+  mergeMeshes,
+  bounds,
+  supportNotes,
+  transform,
+} from "./supports.js";
+import { matchPainting, colorLithophane, cmywPreviewMesh } from "./color.js";
 import { buildMesh, binarySTL, meshStats, validate } from "./geometry.js";
 import { threeMF } from "./three-mf.js";
 import { zipSync, strToU8 } from "fflate";
 self.onmessage = ({ data: d }) => {
+  const reply = (body, transfers = []) =>
+    self.postMessage({ ...body, id: d.id }, transfers);
   try {
     const { nx, ny, rgba, settings: s } = d;
     validate(s);
@@ -25,7 +33,7 @@ self.onmessage = ({ data: d }) => {
         d.algorithm,
       );
       if (d.preview) {
-        self.postMessage({
+        reply({
           expected: result.expected,
           nx,
           ny,
@@ -51,7 +59,7 @@ self.onmessage = ({ data: d }) => {
         "settings.json": strToU8(JSON.stringify(s, null, 2)),
       };
       const bytes = zipSync(files, { level: 3 });
-      self.postMessage(
+      reply(
         { bytes, stats: meshStats(mesh), expected: result.expected, nx, ny },
         [bytes.buffer],
       );
@@ -59,9 +67,29 @@ self.onmessage = ({ data: d }) => {
       const parts = colorLithophane(rgba, nx, ny, s, d.preview),
         files = {};
       if (d.preview) {
-        self.postMessage({ expected: parts.expected, nx, ny });
+        const live = cmywPreviewMesh(parts, nx, ny, s);
+        reply(
+          {
+            expected: parts.expected,
+            nx,
+            ny,
+            ...live,
+            stats: meshStats(live.mesh),
+          },
+          [
+            parts.expected.buffer,
+            live.mesh.positions.buffer,
+            live.mesh.indices.buffer,
+            live.mesh.colors.buffer,
+            live.mesh.uvs.buffer,
+          ],
+        );
         return;
       }
+      if (!["flat", "box"].includes(s.shape))
+        throw new Error(
+          "CMYW material export currently supports flat panels and light boxes. The current shape is preview-only in CMYW mode.",
+        );
       const fitted = {
         ...s,
         shape: s.shape === "box" ? "box" : "flat",
@@ -71,21 +99,31 @@ self.onmessage = ({ data: d }) => {
       if (layout.length > 1) {
         files["matching-support.stl"] = binarySTL(layout[1].mesh);
         files["SUPPORT.txt"] = strToU8(supportNotes(fitted));
-        // Preserve material alignment and place the support alongside it.
-        const pb = bounds(parts[0].mesh),
-          shift = [-pb.min[0], -pb.min[1], 0];
-        const shifted = parts.map((p) => ({
-          ...p,
-          mesh: {
-            ...p.mesh,
-            positions: p.mesh.positions.map((v, i) => v + shift[i % 3]),
-          },
-        }));
-        files["print-layout.3mf"] = threeMF(
-          [...shifted, layout[1]],
-          "CMYW with matching support",
-        );
       }
+      // Material layers stay aligned; matching supports and optional hardware sit beside them.
+      const pb = bounds(parts[0].mesh),
+        shift = [-pb.min[0], -pb.min[1], 0];
+      const combined = parts.map((p) => ({
+        ...p,
+        mesh: transform(p.mesh, (x, y, z) => [x + shift[0], y + shift[1], z]),
+      }));
+      if (layout.length > 1) combined.push(layout[1]);
+      if (d.hardware) {
+        const b = bounds(d.hardware),
+          right = Math.max(...combined.map((p) => bounds(p.mesh).max[0]));
+        combined.push({
+          name: "Optional hardware",
+          color: "#9BA99A",
+          mesh: transform(d.hardware, (x, y, z) => [
+            x - b.min[0] + right + s.printGap,
+            y - b.min[1],
+            z - b.min[2],
+          ]),
+        });
+        files["hardware.stl"] = binarySTL(d.hardware);
+      }
+      if (layout.length > 1 || d.hardware)
+        files["print-layout.3mf"] = threeMF(combined, "CMYW with supports");
       for (const part of parts)
         files[part.name.toLowerCase() + ".stl"] = binarySTL(part.mesh);
       files["color-assembly.3mf"] = threeMF(parts, "CMYW lithophane");
@@ -94,11 +132,9 @@ self.onmessage = ({ data: d }) => {
       );
       files["settings.json"] = strToU8(JSON.stringify(s, null, 2));
       const bytes = zipSync(files, { level: 3 });
-      self.postMessage({ bytes, expected: parts.expected, nx, ny }, [
-        bytes.buffer,
-      ]);
+      reply({ bytes, expected: parts.expected, nx, ny }, [bytes.buffer]);
     }
   } catch (error) {
-    self.postMessage({ error: error.message });
+    reply({ error: error.message });
   }
 };

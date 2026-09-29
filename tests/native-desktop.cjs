@@ -3,7 +3,12 @@ const assert = require("node:assert/strict"),
   fs = require("node:fs/promises"),
   path = require("node:path");
 (async () => {
-  const app = await electron.launch({ args: ["."] });
+  const profile = await fs.mkdtemp(
+    require("node:path").join(require("node:os").tmpdir(), "litho-test-"),
+  );
+  const app = await electron.launch({
+    args: [".", "--user-data-dir=" + profile],
+  });
   try {
     const page = await app.firstWindow(),
       errors = [];
@@ -22,7 +27,9 @@ const assert = require("node:assert/strict"),
       await page.locator("#export-spacing").textContent(),
       /1000 x 750/,
     );
+    await page.locator('[data-tab="supports"]').click();
     await page.locator('[data-setting="support"]').selectOption("none");
+    await page.locator('[data-tab="model"]').click();
     await page.locator('[data-setting="width"]').fill("160");
     await page.waitForTimeout(1000);
     assert.match(
@@ -50,15 +57,13 @@ const assert = require("node:assert/strict"),
     assert.equal(bytes.readUInt32LE(80), 4 * 999 * 749 + 4 * (999 + 749));
     assert.equal(bytes.length, 84 + bytes.readUInt32LE(80) * 50);
     await page.locator("#color-studio-open").click();
+    await page.locator('[data-setting="colorMode"]').selectOption("cmyw");
     await page.waitForFunction(
-      () => document.querySelector("#expected-color")?.width === 1000,
+      () => document.querySelector("#viewport").dataset.colorMode === "cmyw",
       null,
       { timeout: 60000 },
     );
-    assert.equal(
-      await page.locator("#expected-color").evaluate((c) => c.height),
-      750,
-    );
+    assert.equal(await page.locator("dialog[open]").count(), 0);
     assert.deepEqual(errors, []);
     console.log(
       "Native desktop passed: source-sized 1000x750 grid, size-independent sampling, backlit shader, native CMYW preview, and full 150MB STL through save IPC.",

@@ -17,6 +17,8 @@ Reviewed September 29, 2026. Website tools are supporting references, not proof 
 
 - Version 0.2.0 CLI: recursive photo batches, settings profiles, monochrome STL/3MF, dry run, no-clobber output, JSON reporting and exit codes. Desktop and CLI share image sampling and geometry.
 
+- Version 0.5: sidebar color/support/photo settings, live CMYW geometry and image, optional hardware preview alongside the model, shared export layouts and persisted settings.
+
 - Version 0.4: native image-resolution sampling, source-resolution backlit textures, higher-detail interactive geometry, native CMYW predictions, typed mesh buffers, and streamed 3MF XML. Explicit export memory limits remain.
 
 - Version 0.3: auto-sized stands/cases, separated print layouts, CMYW fitted supports, color-paper backlighting on all shapes, and quantized CMYW backlit prediction. Mechanical and optical results are not physically validated.

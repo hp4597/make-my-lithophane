@@ -4,7 +4,7 @@ import { defaults, gridSize, buildMesh, binarySTL } from "../src/geometry.js";
 import { threeMF } from "../src/three-mf.js";
 import { unwrapPreviewUVs } from "../src/preview-uv.js";
 import { unzipSync, strFromU8 } from "fflate";
-import { colorLithophane } from "../src/color.js";
+import { colorLithophane, cmywPreviewMesh } from "../src/color.js";
 test("Native grids match every source pixel and rotate axes without changing physical size", () => {
   const image = { width: 1600, height: 1200 };
   assert.deepEqual(gridSize(defaults, false, image), { nx: 1599, ny: 1199 });
@@ -78,4 +78,21 @@ test("Native CMYW image prediction matches exported geometry prediction", () => 
     colorLithophane(rgba, 3, 3, s).expected,
   );
   assert.equal(colorLithophane(rgba, 3, 3, s, true).length, 0);
+});
+
+test("Live CMYW mesh follows generated material thickness and current shape", () => {
+  const s = { ...defaults, colorMode: "cmyw", colorDepth: 0.64 },
+    rgba = new Uint8ClampedArray(100);
+  for (let i = 0; i < 100; i += 4) rgba.set([180, 80, 20, 255], i);
+  const parts = colorLithophane(rgba, 4, 4, s, true),
+    a = cmywPreviewMesh(parts, 4, 4, s);
+  assert.ok(Math.abs(a.fitted.min - parts.heights[0]) < 0.0001);
+  assert.ok(
+    a.mesh.positions.some(
+      (v, i) => i % 3 === 2 && Math.abs(v - parts.heights[0]) < 0.0001,
+    ),
+  );
+  const b = cmywPreviewMesh(parts, 4, 4, { ...s, shape: "curved" });
+  assert.equal(b.fitted.shape, "curved");
+  assert.notDeepEqual(a.mesh.positions, b.mesh.positions);
 });

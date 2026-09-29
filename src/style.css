@@ -837,3 +837,44 @@ dialog li {
     margin-bottom: 12px;
   }
 }
+
+.settings-tabs {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding-top: 14px;
+}
+.settings-tabs button {
+  flex: 1 0 26%;
+  padding-bottom: 10px;
+}
+.inline-tool {
+  padding: 0 22px 20px;
+}
+.inline-tool[hidden] {
+  display: none;
+}
+.inline-tool p {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.inline-tool .button-row,
+.inline-tool .dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.inline-tool .dialog-actions {
+  margin-top: 16px;
+}
+.inline-tool #gallery {
+  grid-template-columns: 1fr;
+}
+.inline-tool .gallery-card img {
+  height: 90px;
+  object-fit: cover;
+}
+#settings-panel:empty {
+  padding: 0;
+  flex: 0;
+}

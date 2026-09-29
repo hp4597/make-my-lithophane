@@ -222,8 +222,11 @@ export function colorLithophane(rgba, nx, ny, s, predictionOnly = false) {
     bottom = top;
   }
   // Invert the same quantized density model used to generate the material volumes.
+  parts.heights = new Float32Array(n);
   parts.expected = new Float32Array(n * 3);
   for (let k = 0; k < n; k++) {
+    parts.heights[k] =
+      white[k] + channels[0][k] + channels[1][k] + channels[2][k];
     const brightness = Math.max(
       0.01,
       Math.min(1, 1 - (white[k] - s.min) / (s.max - s.min)),
@@ -233,4 +236,33 @@ export function colorLithophane(rgba, nx, ny, s, predictionOnly = false) {
         (brightness * Math.exp((-4.60517 * channels[c][k]) / maxColor)) ** 2.2;
   }
   return parts;
+}
+
+export function cmywPreviewMesh(parts, nx, ny, s) {
+  let min = Infinity,
+    max = -Infinity;
+  for (const h of parts.heights) {
+    min = Math.min(min, h);
+    max = Math.max(max, h);
+  }
+  max = Math.max(max, min + 0.001);
+  const scale = Math.max(1, Math.sqrt((nx * ny) / 600000)),
+    px = Math.max(4, Math.floor(nx / scale)),
+    py = Math.max(4, Math.floor(ny / scale));
+  const pixels = new Float32Array((px + 1) * (py + 1));
+  for (let y = 0; y <= py; y++)
+    for (let x = 0; x <= px; x++)
+      pixels[y * (px + 1) + x] =
+        1 -
+        (parts.heights[
+          Math.round((y / py) * ny) * (nx + 1) + Math.round((x / px) * nx)
+        ] -
+          min) /
+          (max - min);
+  const fitted = { ...s, colorMode: "cmyw", min, max, border: 0, holes: false };
+  return {
+    mesh: buildMesh(fitted, pixels, px, py),
+    fitted,
+    previewGrid: { nx: px, ny: py },
+  };
 }

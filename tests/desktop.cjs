@@ -2,7 +2,12 @@ const { _electron: electron } = require("@playwright/test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 (async () => {
-  const app = await electron.launch({ args: ["."] });
+  const profile = await fs.mkdtemp(
+    require("node:path").join(require("node:os").tmpdir(), "litho-test-"),
+  );
+  const app = await electron.launch({
+    args: [".", "--user-data-dir=" + profile],
+  });
   try {
     const page = await app.firstWindow(),
       errors = [];
@@ -70,7 +75,10 @@ const fs = require("node:fs/promises");
     await page.locator('[data-tab="model"]').click();
     await page.locator('[data-setting="width"]').fill("160");
     await page.waitForTimeout(600);
+    await page.locator('[data-tab="supports"]').click();
+    await page.waitForTimeout(600);
     assert.match(await page.locator("#support-size").textContent(), /128.0 mm/);
+    await page.locator('[data-tab="model"]').click();
     await page.locator('[data-setting="width"]').fill("120");
     await page.locator('[data-tab="print"]').click();
     await page.locator('[data-setting="colorMode"]').selectOption("mono");
@@ -179,27 +187,21 @@ const fs = require("node:fs/promises");
     await page.locator('#photo-library [data-action="current"]').click();
     await page.locator('#photo-library [data-action="current"]').click();
     await page.locator("#layout").selectOption("grid");
-    await page.locator('#photo-library [data-action="apply"]').click();
+
     await page.waitForTimeout(500);
     await page.locator("#color-studio-open").click();
     assert.ok(
       await page
-        .locator('#color-studio [data-mode="chromaphane"]')
-        .isDisabled(),
+        .locator('[data-setting="colorMode"] option[value="painting"]')
+        .evaluate((el) => el.disabled),
     );
+    await page.locator('[data-setting="colorMode"]').selectOption("cmyw");
     await page.waitForFunction(
-      () => document.querySelector("#expected-color")?.width !== 400,
+      () =>
+        document.querySelector("#viewport").dataset.colorMode === "cmyw" &&
+        document.querySelector("#status").textContent.includes("Preview ready"),
     );
-    const colorPixels = await page
-      .locator("#expected-color")
-      .evaluate((c) =>
-        Array.from(
-          c.getContext("2d").getImageData(0, 0, c.width, c.height).data,
-        ),
-      );
-    assert.ok(
-      colorPixels.some((v, i) => i % 4 === 0 && v !== colorPixels[i + 1]),
-    );
+    assert.equal(await page.locator("dialog[open]").count(), 0);
     await page.screenshot({ path: "test-results/color-studio.png" });
     const cmywPath = path.resolve("test-results/cmyw-kit.zip");
     await app.evaluate(({ dialog }, output) => {
@@ -208,12 +210,10 @@ const fs = require("node:fs/promises");
         filePath: output,
       });
     }, cmywPath);
-    await page.locator('#color-studio [data-action="export"]').click();
+    await page.locator("#export-color").click();
     await page.waitForFunction(
-      () =>
-        document.querySelector("#color-progress").textContent === "Ready" &&
-        !document.querySelector('#color-studio [data-action="export"]')
-          .disabled,
+      () => document.querySelector("#status").textContent === "Export complete",
+      null,
       { timeout: 60000 },
     );
     const cmyw = unzipSync(await fs.readFile(cmywPath));
@@ -228,7 +228,7 @@ const fs = require("node:fs/promises");
       "color-assembly.3mf",
     ])
       assert.ok(cmyw[name]);
-    await page.locator('#color-studio [data-action="close"]').click();
+    await page.locator('[data-setting="colorMode"]').selectOption("mono");
     await page.locator("#mount-open").click();
     const mountPath = path.resolve("test-results/mount-kit.zip");
     await app.evaluate(({ dialog }, output) => {
@@ -245,7 +245,7 @@ const fs = require("node:fs/promises");
     const mount = unzipSync(await fs.readFile(mountPath));
     assert.ok(mount["mount.stl"]);
     assert.ok(mount["mount.3mf"]);
-    await page.locator('#mount-studio [data-action="close"]').click();
+
     await page.locator("#library-open").click();
     await page.locator('#photo-library [data-action="current"]').click();
     await page.locator('#photo-library [data-action="current"]').click();

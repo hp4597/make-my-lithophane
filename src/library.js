@@ -5,16 +5,18 @@ export function initLibrary(api) {
     gap = 3,
     background = 0,
     cache;
-  const dialog = document.createElement("dialog");
+  const dialog = document.createElement("section");
   dialog.id = "photo-library";
-  document.body.append(dialog);
+  dialog.className = "inline-tool";
+  dialog.hidden = true;
+  document.querySelector("#tool-panels").append(dialog);
   const button = document.createElement("button");
   button.className = "guide-button";
   button.id = "library-open";
   button.textContent = "Photo library & layouts →";
   document.querySelector(".spaced").before(button);
   function draw() {
-    dialog.innerHTML = `<button class="dialog-close" data-action="close">×</button><span class="eyebrow">PHOTO LIBRARY</span><h2>One story. Many moments.</h2><p>Keep up to eight photos in your project. Select one, arrange a collage, wrap a panorama around a lamp, or export individual panels.</p><div class="button-row"><button data-action="import">Add photos</button><button data-action="current">Add current photo</button></div><div id="gallery"></div><div class="field-row"><label class="field"><span>Layout</span><select id="layout"><option value="single">Current photo</option><option value="strip">Horizontal panorama</option><option value="grid">Photo grid</option></select></label><label class="field"><span>Gap (mm)</span><input id="photo-gap" type="number" min="0" max="20" value="${gap}"/></label></div><label class="range-field"><span>Gap brightness <output>${background}</output></span><input id="gap-brightness" type="range" min="0" max="1" step="0.05" value="${background}"/></label><p class="hint">Each image fills its cell. Image adjustments in the main editor apply to the whole composition. Drag ordering is replaced by the arrow buttons for precise placement.</p><div class="dialog-actions"><button data-action="batch">Export individual panels</button><button data-action="box">Four-sided light box</button><button data-action="apply" class="primary">Apply layout</button></div><input id="library-files" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden/>`;
+    dialog.innerHTML = `<span class="eyebrow">PHOTO LIBRARY</span><div class="panel-title">Photo library & layouts</div><p>Keep up to eight photos in your project. Select one, arrange a collage, wrap a panorama around a lamp, or export individual panels.</p><div class="button-row"><button data-action="import">Add photos</button><button data-action="current">Add current photo</button></div><div id="gallery"></div><div class="field-row"><label class="field"><span>Layout</span><select id="layout"><option value="single">Current photo</option><option value="strip">Horizontal panorama</option><option value="grid">Photo grid</option></select></label><label class="field"><span>Gap (mm)</span><input id="photo-gap" type="number" min="0" max="20" value="${gap}"/></label></div><label class="range-field"><span>Gap brightness <output>${background}</output></span><input id="gap-brightness" type="range" min="0" max="1" step="0.05" value="${background}"/></label><p class="hint">Each image fills its cell. Image adjustments in the main editor apply to the whole composition. Drag ordering is replaced by the arrow buttons for precise placement.</p><div class="dialog-actions"><button data-action="batch">Export individual panels</button><button data-action="box">Four-sided light box</button></div><input id="library-files" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden/>`;
     dialog.querySelector("#layout").value = layout;
     const gallery = dialog.querySelector("#gallery");
     photos.forEach((p, i) => {
@@ -116,11 +118,22 @@ export function initLibrary(api) {
       );
     photos.push({ src, name, image: await loadImage(src) });
     cache = null;
+    api.changed();
   }
   button.onclick = () => {
     draw();
-    dialog.showModal();
+    api.open();
   };
+  dialog.addEventListener("input", (e) => {
+    if (["layout", "photo-gap", "gap-brightness"].includes(e.target.id)) {
+      const nextGap = Number(dialog.querySelector("#photo-gap").value);
+      if (!Number.isFinite(nextGap) || nextGap < 0 || nextGap > 20) return;
+      gap = nextGap;
+      background = Number(dialog.querySelector("#gap-brightness").value);
+      layout = dialog.querySelector("#layout").value;
+      invalidate();
+    }
+  });
   dialog.addEventListener("change", async (e) => {
     try {
       if (e.target.id === "library-files") {
@@ -149,7 +162,6 @@ export function initLibrary(api) {
       const i = Number(b.dataset.photo);
       switch (b.dataset.action) {
         case "close":
-          dialog.close();
           break;
         case "import":
           dialog.querySelector("#library-files").click();
@@ -161,19 +173,20 @@ export function initLibrary(api) {
         case "use":
           layout = "single";
           await api.setPhoto(photos[i].src, photos[i].name);
-          dialog.close();
+          draw();
+
           invalidate();
           break;
         case "left":
           if (i > 0) {
             [photos[i], photos[i - 1]] = [photos[i - 1], photos[i]];
-            cache = null;
+            invalidate();
             draw();
           }
           break;
         case "remove":
           photos.splice(i, 1);
-          cache = null;
+          invalidate();
           draw();
           break;
         case "apply": {
@@ -183,19 +196,19 @@ export function initLibrary(api) {
           gap = nextGap;
           background = Number(dialog.querySelector("#gap-brightness").value);
           layout = dialog.querySelector("#layout").value;
-          dialog.close();
+
           invalidate();
           break;
         }
         case "box":
           if (photos.length < 4)
             throw new Error("Add at least four photos first.");
-          dialog.close();
+
           await api.box(photos);
           break;
         case "batch":
           if (!photos.length) throw new Error("Add photos first.");
-          dialog.close();
+
           await api.batch(photos);
           break;
       }
@@ -204,6 +217,10 @@ export function initLibrary(api) {
     }
   });
   return {
+    show: (visible) => {
+      dialog.hidden = !visible;
+      if (visible) draw();
+    },
     getImage,
     getState: () => ({
       layout,
