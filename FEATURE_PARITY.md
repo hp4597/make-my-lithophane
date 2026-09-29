@@ -21,6 +21,8 @@ Not claimed: exact proprietary frame replicas, verified commercial snap fits, ev
 
 ## Implemented and covered by automated checks
 
+- Version 0.6.1: native CMYW export budget raised to four million cells, chunked STL compression, shared material buffers for layout, worker-built complete kits and direct 3MF export.
+
 - Version 0.2.0 CLI: recursive photo batches, settings profiles, monochrome STL/3MF, dry run, no-clobber output, JSON reporting and exit codes. Desktop and CLI share image sampling and geometry.
 
 - Version 0.5: sidebar color/support/photo settings, live CMYW geometry and image, optional hardware preview alongside the model, shared export layouts and persisted settings.

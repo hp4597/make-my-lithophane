@@ -2,7 +2,7 @@
 
 A local Windows desktop studio for turning photos into printable lithophanes. Photos remain on the device; no account or service is required.
 
-Version **0.6.0** adds live lighting enclosures for flat panels, curved panels, cylinders, lamp shades, night lights and lightboxes, plus CMYW material export for those six shapes. The batch CLI remains available. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
+Version **0.6.1** adds live lighting enclosures for flat panels, curved panels, cylinders, lamp shades, night lights and lightboxes, plus CMYW material export for those six shapes. The batch CLI remains available. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
 
 ## Run and build
 
@@ -17,8 +17,8 @@ npm start
 
 Double-click **`build-distribution.bat`**. It installs locked dependencies, runs geometry/export tests, and builds both executables in `release/`:
 
-- **`Make My Lithophane 0.6.0 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
-- **`Make My Lithophane Setup 0.6.0.exe`** — Windows installer with installation-folder selection and desktop shortcut.
+- **`Make My Lithophane 0.6.1 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
+- **`Make My Lithophane Setup 0.6.1.exe`** — Windows installer with installation-folder selection and desktop shortcut.
 - **`win-unpacked/Make My Lithophane.exe`** — unpacked app; keep all files in that folder together.
 
 For a terminal or CI run without a final keypress: `build-distribution.bat --no-pause`. Internet is needed for build dependencies, but the resulting app works offline. The script respects an existing `NODE_EXTRA_CA_CERTS`; otherwise it exports Windows' public trusted certificates into a temporary PEM for Node, without disabling TLS verification or changing machine settings.
@@ -100,7 +100,7 @@ New projects default to **Model > Resolution > Match image pixels (native)**. A 
 
 Backlit 3D uses a native-resolution image texture rather than interpolating colors across a tiny draft mesh. Interactive geometry has a 600,000-cell budget; the viewport and export labels report their dimensions separately. CMYW predictions use native image dimensions, up to 16 million cells, without creating material meshes just for preview.
 
-**Explicit resource limits:** main exports allow 4 million cells (about 16 million triangles / 800 MB STL); CMYW kits allow 1 million cells across each of their four volumes; four-wall kits allow 150,000 cells per wall. Requests above a limit fail with an explanation and never silently downsample. Choose Custom spacing or a smaller source to fit the limit. GPU texture dimensions are hardware dependent and checked before upload. Native backlit preview does not imply that the printer can reproduce every pixel. Large models require substantial RAM and slicer capacity. ThreeMF XML is compressed in chunks to avoid constructing a huge XML string.
+**Explicit resource limits:** main exports allow 4 million cells (about 16 million triangles / 800 MB STL); CMYW kits allow 4 million cells across each of their four volumes; four-wall kits allow 150,000 cells per wall. Requests above a limit fail with an explanation and never silently downsample. Choose Custom spacing or a smaller source to fit the limit. GPU texture dimensions are hardware dependent and checked before upload. Native backlit preview does not imply that the printer can reproduce every pixel. Large models require substantial RAM and slicer capacity. ThreeMF XML is compressed in chunks to avoid constructing a huge XML string.
 
 ## Version 0.5: one live workspace
 
@@ -124,3 +124,7 @@ Housing parts follow panel size and CMYW thickness. Lighting replaces the legacy
 The [Bambu modular-board drawing](https://store.bblcdn.com/s1/default/1d024884bbd542ef9f6795839b5285c0/Lithophane_LED_Backlight_Board_Kit.pdf) specifies 48 × 144 mm modules, 1.6 mm PCB thickness and 7.15 mm projection. Two, three and four modules produce derived board footprints of 96 / 144 / 192 × 144 mm. These are our frame layouts, not copied Bambu frame geometry. The [fixed-board specification](https://asia.store.bambulab.com/products/bambu-cmyk-backlight-board?id=42235769979016&modelId=1020467) lists a 156 × 120 mm PCB with a 144 × 108 mm illuminated area. Its thickness/projection fields are editable estimates. Fit panel to board uses the fixed illuminated area or a derived modular margin. Puck/socket dimensions are custom inputs, not certified hardware presets.
 
 Automated checks cover closed meshes, winding, separated layouts, live settings and six-shape color exports. Physical fit, heat, retention, optical quality and complete Bambu/Lithophane Maker feature parity are not validated. Use low-heat LEDs and test the actual hardware. Filament painting remains paused as Work in progress.
+
+### Native CMYW export fix (0.6.1)
+
+CMYW exports now accept up to 4,000,000 cells, preserving the image grid. The 1672 × 941 image dimensions from the reported failure fit this budget. STL entries are compressed incrementally; material layouts share original mesh buffers and apply placement during 3MF serialization. Target/predicted PNGs and project data are included by the export worker, eliminating a full unzip/repack in the UI. Direct 3MF export skips STL/PNG generation. This reduces temporary memory; large meshes still require substantial RAM and slicer capacity, and the budget remains explicit rather than silently downsampling.

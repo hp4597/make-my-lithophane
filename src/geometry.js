@@ -1,3 +1,4 @@
+export const COLOR_EXPORT_CELL_LIMIT = 4000000;
 import { lightingDefaults, validateLighting } from "./lighting-settings.js";
 export const defaults = {
   ...lightingDefaults,

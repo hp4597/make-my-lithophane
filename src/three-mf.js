@@ -29,12 +29,13 @@ export function threeMF(parts, title = "Lithophane") {
   emit("</basematerials>");
   parts.forEach((part, j) => {
     const { positions: p, indices: i } = part.mesh;
+    const shift = part.translation || [0, 0, 0];
     emit(
       `<object id="${j + 2}" type="model" name="${xmlEscape(part.name)}" pid="1" pindex="${j}"><mesh><vertices>`,
     );
     let buffer = "";
     for (let k = 0; k < p.length; k += 3) {
-      buffer += `<vertex x="${p[k].toFixed(5)}" y="${p[k + 1].toFixed(5)}" z="${p[k + 2].toFixed(5)}"/>`;
+      buffer += `<vertex x="${(p[k] + shift[0]).toFixed(5)}" y="${(p[k + 1] + shift[1]).toFixed(5)}" z="${(p[k + 2] + shift[2]).toFixed(5)}"/>`;
       if (k % 6144 === 0) {
         emit(buffer);
         buffer = "";

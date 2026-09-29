@@ -1,23 +1,20 @@
-import {
-  printParts,
-  mergeMeshes,
-  bounds,
-  supportNotes,
-  transform,
-} from "./supports.js";
+import { COLOR_EXPORT_CELL_LIMIT } from "./geometry.js";
+import { exportArchive } from "./export-archive.js";
+import { colorLayout } from "./color-layout.js";
+import { supportNotes } from "./supports.js";
 import { matchPainting, colorLithophane, cmywPreviewMesh } from "./color.js";
 import { buildMesh, binarySTL, meshStats, validate } from "./geometry.js";
 import { threeMF } from "./three-mf.js";
 import { zipSync, strToU8 } from "fflate";
-self.onmessage = ({ data: d }) => {
+self.onmessage = async ({ data: d }) => {
   const reply = (body, transfers = []) =>
     self.postMessage({ ...body, id: d.id }, transfers);
   try {
     const { nx, ny, rgba, settings: s } = d;
     validate(s);
-    if (nx * ny > (d.preview ? 16000000 : 1000000))
+    if (nx * ny > (d.preview ? 16000000 : COLOR_EXPORT_CELL_LIMIT))
       throw new Error(
-        "Color export exceeds 1,000,000 cells. Increase sample spacing or reduce dimensions.",
+        "Color export exceeds 4,000,000 cells. Increase sample spacing or reduce dimensions.",
       );
     if (d.mode === "chromaphane")
       throw new Error(
@@ -64,8 +61,7 @@ self.onmessage = ({ data: d }) => {
         [bytes.buffer],
       );
     } else {
-      const parts = colorLithophane(rgba, nx, ny, s, d.preview),
-        files = {};
+      const parts = colorLithophane(rgba, nx, ny, s, d.preview);
       if (d.preview) {
         const live = cmywPreviewMesh(parts, nx, ny, s);
         reply(
@@ -99,53 +95,56 @@ self.onmessage = ({ data: d }) => {
         shape: s.shape,
         max: parts.heights.reduce((a, b) => Math.max(a, b), 0),
       };
-      const layout = printParts(mergeMeshes(parts.map((p) => p.mesh)), fitted);
-      if (layout.length > 1) {
+      const { supports, combined } = colorLayout(parts, fitted, d.hardware);
+      if (d.format === "3mf") {
+        const bytes = threeMF(combined, "CMYW with supports");
+        reply({ bytes, nx, ny }, [bytes.buffer]);
+        return;
+      }
+      const archive = exportArchive();
+      for (const p of supports)
+        archive.stl(p.name.toLowerCase().replaceAll(" ", "-") + ".stl", p.mesh);
+      if (supports.length) {
         if (s.lightingSetup === "none")
-          files["matching-support.stl"] = binarySTL(layout[1].mesh);
-        for (const p of layout.slice(1))
-          files[p.name.toLowerCase().replaceAll(" ", "-") + ".stl"] = binarySTL(
-            p.mesh,
-          );
-        files["SUPPORT.txt"] = strToU8(supportNotes(fitted));
+          archive.stl("matching-support.stl", supports[0].mesh);
+        archive.add("SUPPORT.txt", strToU8(supportNotes(fitted)));
       }
-      // Material layers stay aligned; matching supports and optional hardware sit beside them.
-      const pb = bounds(mergeMeshes(parts.map((p) => p.mesh))),
-        shift = layout.length > 1 ? pb.min.map((v) => -v) : [0, 0, 0];
-      const combined = parts.map((p) => ({
-        ...p,
-        mesh: transform(p.mesh, (x, y, z) => [
-          x + shift[0],
-          y + shift[1],
-          z + shift[2],
-        ]),
-      }));
-      if (layout.length > 1) combined.push(...layout.slice(1));
-      if (d.hardware) {
-        const b = bounds(d.hardware),
-          right = Math.max(...combined.map((p) => bounds(p.mesh).max[0]));
-        combined.push({
-          name: "Optional hardware",
-          color: "#9BA99A",
-          mesh: transform(d.hardware, (x, y, z) => [
-            x - b.min[0] + right + s.printGap,
-            y - b.min[1],
-            z - b.min[2],
-          ]),
-        });
-        files["hardware.stl"] = binarySTL(d.hardware);
-      }
-      if (layout.length > 1 || d.hardware)
-        files["print-layout.3mf"] = threeMF(combined, "CMYW with supports");
+      if (d.hardware) archive.stl("hardware.stl", d.hardware);
+      if (supports.length || d.hardware)
+        archive.add(
+          "print-layout.3mf",
+          threeMF(combined, "CMYW with supports"),
+        );
       for (const part of parts)
-        files[part.name.toLowerCase() + ".stl"] = binarySTL(part.mesh);
-      files["color-assembly.3mf"] = threeMF(parts, "CMYW lithophane");
-      files["PRINTING.txt"] = strToU8(
-        `CMYW COLOR LITHOPHANE\nFour touching, non-overlapping volumes in millimeters. Open the 3MF as one multipart object, preserve part alignment and assign Cyan/Magenta/Yellow/White to corresponding extruders. Colors in the 3MF are descriptive; extruder assignment depends on your slicer.\nLayer height: ${s.layer} mm. Color thickness cap: ${s.colorDepth} mm plus one minimum layer. Orient the assembled material volumes together for your shape; curved and round models may need supports.\nThis uses an experimental optical-density separation, not a calibrated commercial palette. Every channel has a one-layer floor for closed geometry; this may tint whites. Print a small test and adjust material/color depth. The image belongs on the light-source side; view through the white layer.\n`,
+        archive.stl(part.name.toLowerCase() + ".stl", part.mesh);
+      archive.add("color-assembly.3mf", threeMF(parts, "CMYW lithophane"));
+      archive.add(
+        "PRINTING.txt",
+        strToU8(
+          `CMYW COLOR LITHOPHANE\nFour touching, non-overlapping volumes in millimeters. Open the 3MF as one multipart object, preserve part alignment and assign Cyan/Magenta/Yellow/White to corresponding extruders. Colors in the 3MF are descriptive; extruder assignment depends on your slicer.\nLayer height: ${s.layer} mm. Color thickness cap: ${s.colorDepth} mm plus one minimum layer. Orient the assembled material volumes together for your shape; curved and round models may need supports.\nThis uses an experimental optical-density separation, not a calibrated commercial palette. Every channel has a one-layer floor for closed geometry; this may tint whites. Print a small test and adjust material/color depth. The image belongs on the light-source side; view through the white layer.\n`,
+        ),
       );
-      files["settings.json"] = strToU8(JSON.stringify(s, null, 2));
-      const bytes = zipSync(files, { level: 3 });
-      reply({ bytes, expected: parts.expected, nx, ny }, [bytes.buffer]);
+      archive.add("settings.json", strToU8(JSON.stringify(s, null, 2)));
+      if (d.project) archive.add("project.litho", strToU8(d.project));
+      if (d.targetPNG) archive.add("target.png", d.targetPNG);
+      const canvas = new OffscreenCanvas(nx + 1, ny + 1),
+        ctx = canvas.getContext("2d"),
+        pixels = ctx.createImageData(nx + 1, ny + 1);
+      for (let y = 0; y <= ny; y++)
+        for (let x = 0; x <= nx; x++) {
+          const a = (y * (nx + 1) + x) * 3,
+            b = ((ny - y) * (nx + 1) + x) * 4;
+          for (let c = 0; c < 3; c++)
+            pixels.data[b + c] = 255 * Math.pow(parts.expected[a + c], 1 / 2.2);
+          pixels.data[b + 3] = 255;
+        }
+      ctx.putImageData(pixels, 0, 0);
+      archive.add(
+        "predicted.png",
+        new Uint8Array(await (await canvas.convertToBlob()).arrayBuffer()),
+      );
+      const bytes = archive.finish();
+      reply({ bytes, nx, ny }, [bytes.buffer]);
     }
   } catch (error) {
     reply({ error: error.message });

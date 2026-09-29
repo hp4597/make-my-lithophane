@@ -1,7 +1,6 @@
-import { gridSize } from "./geometry.js";
+import { gridSize, COLOR_EXPORT_CELL_LIMIT } from "./geometry.js";
 import { starterFilaments, paletteForStack } from "./color.js";
 import { sampleImage } from "./image.js";
-import { unzipSync, zipSync, strToU8 } from "fflate";
 export function predictionCanvas(result) {
   const canvas = document.createElement("canvas");
   canvas.width = result.nx + 1;
@@ -38,21 +37,30 @@ export function initAdvanced(api) {
       j.reject(new Error("Color generation failed."));
     jobs.clear();
   };
-  async function process(settings, source, preview) {
+  async function process(settings, source, preview, format = "kit") {
     const { nx, ny } = gridSize(
       preview ? { ...settings, resolutionMode: "image" } : settings,
       false,
       source,
-      preview ? 16000000 : 1000000,
+      preview ? 16000000 : COLOR_EXPORT_CELL_LIMIT,
     );
     const canvas = sampleImage(source, settings, nx, ny, true),
       rgba = canvas.getContext("2d").getImageData(0, 0, nx + 1, ny + 1).data,
       id = ++serial;
+    const targetPNG =
+      !preview && format !== "3mf"
+        ? new Uint8Array(
+            await (await new Promise((r) => canvas.toBlob(r))).arrayBuffer(),
+          )
+        : null;
     const result = await new Promise((resolve, reject) => {
       jobs.set(id, { resolve, reject });
       worker.postMessage(
         {
           id,
+          format,
+          targetPNG,
+          project: preview ? null : api.getProject(),
           settings,
           nx,
           ny,
@@ -61,10 +69,12 @@ export function initAdvanced(api) {
           preview,
           hardware: preview ? null : api.getHardware?.(),
         },
-        [rgba.buffer],
+        targetPNG ? [rgba.buffer, targetPNG.buffer] : [rgba.buffer],
       );
     });
-    return { ...result, texture: predictionCanvas(result), source: canvas };
+    return preview
+      ? { ...result, texture: predictionCanvas(result), source: canvas }
+      : result;
   }
   let activePreview = false,
     pendingPreview = null;
@@ -99,34 +109,17 @@ export function initAdvanced(api) {
         throw new Error(
           "CMYW export supports flat, curved, cylinder, lamp shade, night light and lightbox.",
         );
-      const result = await process(s, api.getImage(), false),
-        files = unzipSync(result.bytes);
-      if (format === "3mf") {
-        if (
-          await api.saveFile(
-            api.getName() + ".3mf",
-            files["print-layout.3mf"] || files["color-assembly.3mf"],
-          )
-        )
-          api.toast("3MF model saved in millimeters.");
-        return;
-      }
-      files["project.litho"] = strToU8(api.getProject());
-      for (const [name, canvas] of [
-        ["target.png", result.source],
-        ["predicted.png", result.texture],
-      ]) {
-        const blob = await new Promise((r) => canvas.toBlob(r));
-        files[name] = new Uint8Array(await blob.arrayBuffer());
-      }
+      const result = await process(s, api.getImage(), false, format);
       if (
         await api.saveFile(
-          api.getName() + "-cmyw.zip",
-          zipSync(files, { level: 3 }),
+          api.getName() + (format === "3mf" ? ".3mf" : "-cmyw.zip"),
+          result.bytes,
         )
       )
         api.toast(
-          "Color kit generated. Check filament assignments and swap heights in your slicer.",
+          format === "3mf"
+            ? "3MF model saved in millimeters."
+            : "Color kit generated. Check filament assignments in your slicer.",
         );
     },
     getState: () => ({

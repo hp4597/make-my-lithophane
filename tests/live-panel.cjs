@@ -105,6 +105,25 @@ const assert = require("node:assert/strict"),
     assert.equal(project.settings.colorMode, "cmyw");
     assert.equal(project.mountStudio.p.width, 55);
     assert.equal(project.mountStudio.enabled, true);
+    const modelOutput = path.resolve("test-results/live-cmyw.3mf");
+    await app.evaluate(({ dialog }, output) => {
+      dialog.showSaveDialog = async () => ({
+        canceled: false,
+        filePath: output,
+      });
+    }, modelOutput);
+    await page.locator("#export-3mf").click();
+    await page.waitForFunction(
+      () => document.querySelector("#status").textContent === "Export complete",
+      null,
+      { timeout: 60000 },
+    );
+    const modelXML = strFromU8(
+      unzipSync(await fs.readFile(modelOutput))["3D/3dmodel.model"],
+    );
+    assert.match(modelXML, /Cyan/);
+    assert.match(modelXML, /Matching stand/);
+    assert.match(modelXML, /Optional hardware/);
     await page.locator('[data-tab="photos"]').click();
     await page.locator('#photo-library [data-action="current"]').click();
     await update(() => page.locator("#layout").selectOption("grid"));
