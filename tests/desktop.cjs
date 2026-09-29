@@ -14,6 +14,10 @@ const fs = require("node:fs/promises");
           ?.textContent.includes("Preview ready"),
       { timeout: 30000 },
     );
+    await page
+      .locator('[data-setting="resolutionMode"]')
+      .selectOption("spacing");
+    await page.locator('[data-setting="resolution"]').fill("0.35");
     await fs.mkdir("test-results", { recursive: true });
     await page.screenshot({ path: "test-results/studio.png" });
     for (const shape of [

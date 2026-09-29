@@ -8,7 +8,8 @@ export const defaults = {
   height: 90,
   min: 0.8,
   max: 3.2,
-  resolution: 0.35,
+  resolution: 0.1,
+  resolutionMode: "image",
   border: 3,
   angle: 100,
   taper: 0.8,
@@ -80,8 +81,10 @@ export function validate(s) {
     throw new Error(
       "Maximum thickness must exceed minimum thickness (0.4–10 mm).",
     );
-  if (s.resolution < 0.15 || s.resolution > 2)
-    throw new Error("Resolution must be 0.15–2 mm.");
+  if (!["image", "spacing"].includes(s.resolutionMode))
+    throw new Error("Unknown resolution mode.");
+  if (s.resolution < 0.01 || s.resolution > 2)
+    throw new Error("Resolution must be 0.01–2 mm.");
   if (s.border < 0 || s.border >= Math.min(s.width, s.height) / 3)
     throw new Error("Border is too large for this panel.");
   if (s.angle < 10 || s.angle > 300 || s.taper < 0.3 || s.taper > 1.5)
@@ -148,21 +151,33 @@ export function validate(s) {
       "Hanging holes need a border at least 2 mm wider than the hole diameter.",
     );
 }
-export function gridSize(s, preview = false) {
-  const spherical = ["sphere", "moon"].includes(s.shape);
-  const round = ["cylinder", "lamp", "sphere", "moon"].includes(s.shape);
-  const w = round ? s.width * Math.PI : s.width;
-  const h = spherical
-    ? (s.width / 2) * (Math.PI / 2 + Math.acos(s.opening / s.width))
-    : s.height;
-  const scale = preview
-    ? Math.max(s.resolution, w / 200, h / 160)
-    : s.resolution;
-  const nx = Math.max(4, Math.ceil(w / scale)),
-    ny = Math.max(4, Math.ceil(h / scale));
-  if (nx * ny > 750000)
+export function gridSize(s, preview = false, source = null, limit = 4000000) {
+  let nx, ny;
+  if (s.resolutionMode === "image") {
+    if (!source || source.width < 2 || source.height < 2)
+      throw new Error(
+        "Image pixel dimensions are required for Match image pixels.",
+      );
+    const rotated = s.rotation % 180 !== 0;
+    nx = Math.max(4, (rotated ? source.height : source.width) - 1);
+    ny = Math.max(4, (rotated ? source.width : source.height) - 1);
+  } else {
+    const spherical = ["sphere", "moon"].includes(s.shape),
+      round = ["cylinder", "lamp", "sphere", "moon"].includes(s.shape);
+    const w = round ? s.width * Math.PI : s.width,
+      h = spherical
+        ? (s.width / 2) * (Math.PI / 2 + Math.acos(s.opening / s.width))
+        : s.height;
+    nx = Math.max(4, Math.ceil(w / s.resolution));
+    ny = Math.max(4, Math.ceil(h / s.resolution));
+  }
+  if (preview) {
+    const scale = Math.max(1, Math.sqrt((nx * ny) / 600000));
+    nx = Math.max(4, Math.floor(nx / scale));
+    ny = Math.max(4, Math.floor(ny / scale));
+  } else if (nx * ny > limit)
     throw new Error(
-      "Model exceeds 750,000 cells. Increase resolution spacing or reduce dimensions.",
+      `Requested ${nx + 1} x ${ny + 1} samples exceeds this export's ${limit.toLocaleString()}-cell memory limit. No downsampling was applied. Choose Custom spacing or a smaller image.`,
     );
   return { nx, ny };
 }
@@ -181,10 +196,13 @@ export function buildMesh(s, pixels, nx, ny, rgba = null) {
   validate(s);
   if (pixels.length !== (nx + 1) * (ny + 1))
     throw new Error("Image grid does not match model grid.");
-  const positions = [],
-    indices = [],
-    colors = [],
-    map = new Map();
+  const positions = new Float32Array((nx + 1) * (ny + 1) * 6),
+    colors = new Float32Array(positions.length),
+    uvs = new Float32Array((nx + 1) * (ny + 1) * 4),
+    map = new Int32Array((nx + 1) * (ny + 1) * 2).fill(-1);
+  let indices,
+    vertexCount = 0,
+    indexCount = 0;
   const periodic = ["cylinder", "lamp", "sphere", "moon"].includes(s.shape);
   const sphere = ["sphere", "moon"].includes(s.shape);
   const radius = s.width / 2;
@@ -193,8 +211,8 @@ export function buildMesh(s, pixels, nx, ny, rgba = null) {
     // Weld full-wrap seams and the sphere's north pole by index, not tolerance.
     if (periodic && x === nx) x = 0;
     if (sphere && y === ny) x = 0;
-    const key = `${x},${y},${back}`;
-    if (map.has(key)) return map.get(key);
+    const key = (y * (nx + 1) + x) * 2 + (back ? 1 : 0);
+    if (map[key] !== -1) return map[key];
     const u = x / nx,
       v = y / ny;
     let light = pixels[y * (nx + 1) + x];
@@ -248,15 +266,17 @@ export function buildMesh(s, pixels, nx, ny, rgba = null) {
         (r + d) * Math.cos(a) - r,
       ];
     } else p = [(u - 0.5) * s.width, (v - 0.5) * s.height, d];
-    const id = positions.length / 3;
-    map.set(key, id);
-    positions.push(...p);
+    const id = vertexCount++;
+    map[key] = id;
+    positions.set(p, id * 3);
+    uvs.set(frame ? [-1, -1] : [u, v], id * 2);
     const c = (frame ? 0.07 : 0.07 + light * 0.93) ** 2.2;
     if (rgba && !frame) {
       const i = ((ny - y) * (nx + 1) + x) * 4;
       for (let channel = 0; channel < 3; channel++)
-        colors.push((rgba[i + channel] / 255) ** 2.2 * (0.25 + light * 0.75));
-    } else colors.push(c, c * 0.95, c * 0.82);
+        colors[id * 3 + channel] =
+          (rgba[i + channel] / 255) ** 2.2 * (0.25 + light * 0.75);
+    } else colors.set([c, c * 0.95, c * 0.82], id * 3);
     return id;
   }
   const active = new Uint8Array(nx * ny);
@@ -354,9 +374,25 @@ export function buildMesh(s, pixels, nx, ny, rgba = null) {
     if (periodic) x = (x + nx) % nx;
     return x >= 0 && x < nx && active[y * nx + x];
   }
+  let capacity = 0;
+  for (let y = 0; y < ny; y++)
+    for (let x = 0; x < nx; x++)
+      if (isOn(x, y)) {
+        capacity += 12;
+        if (!isOn(x, y - 1)) capacity += 6;
+        if (!isOn(x + 1, y)) capacity += 6;
+        if (!isOn(x, y + 1)) capacity += 6;
+        if (!isOn(x - 1, y)) capacity += 6;
+      }
+  indices = new Uint32Array(capacity);
   function tri(a, b, c) {
-    if (a !== b && b !== c && a !== c) indices.push(a, b, c);
+    if (a !== b && b !== c && a !== c) {
+      indices[indexCount++] = a;
+      indices[indexCount++] = b;
+      indices[indexCount++] = c;
+    }
   }
+
   for (let y = 0; y < ny; y++)
     for (let x = 0; x < nx; x++)
       if (isOn(x, y)) {
@@ -385,14 +421,15 @@ export function buildMesh(s, pixels, nx, ny, rgba = null) {
           }
         });
       }
-  if (!indices.length)
+  if (!indexCount)
     throw new Error(
       "No silhouette remains. Increase the silhouette threshold.",
     );
   return {
-    positions: new Float32Array(positions),
-    indices: new Uint32Array(indices),
-    colors: new Float32Array(colors),
+    positions: positions.subarray(0, vertexCount * 3),
+    indices: indices.subarray(0, indexCount),
+    colors: colors.subarray(0, vertexCount * 3),
+    uvs: uvs.subarray(0, vertexCount * 2),
   };
 }
 export function binarySTL(mesh) {

@@ -96,9 +96,10 @@ test("Image tone transformations clamp and invert", () => {
   assert.equal(tone(1, { ...defaults, brightness: 100 }), 1);
 });
 test("Preview resolution is limited but export follows spacing", () => {
-  const p = gridSize(defaults, true),
-    f = gridSize(defaults, false);
-  assert.ok(p.nx <= 200);
+  const s = { ...defaults, resolutionMode: "spacing", resolution: 0.06 };
+  const p = gridSize(s, true),
+    f = gridSize(s, false);
+  assert.ok(p.nx * p.ny <= 600000);
   assert.ok(f.nx > p.nx);
 });
 test("Filament painting places white on higher bands for dark-to-light swaps", () => {

@@ -1,4 +1,4 @@
-import { tone } from "./geometry.js";
+import { tone, gridSize } from "./geometry.js";
 export function loadImage(src) {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -152,4 +152,53 @@ export function demoImage() {
     }
   }
   return c.toDataURL("image/png");
+}
+
+// Native-resolution optical image, independent of the interactive mesh budget.
+export function backlitImage(image, s) {
+  const rotated = s.rotation % 180 !== 0;
+  let w = rotated ? image.height : image.width,
+    h = rotated ? image.width : image.height;
+  if (s.resolutionMode === "spacing") {
+    const { nx, ny } = gridSize(s, true, image),
+      ratio = (nx + 1) / (ny + 1);
+    w = Math.max(
+      2,
+      Math.round((s.fit === "contain" ? Math.max : Math.min)(w, h * ratio)),
+    );
+    h = Math.max(2, Math.round(w / ratio));
+  }
+  const canvas = sampleImage(image, s, w - 1, h - 1, true);
+  if (s.colorMode !== "paper") {
+    const values = sampleImage(image, s, w - 1, h - 1),
+      ctx = canvas.getContext("2d"),
+      data = ctx.getImageData(0, 0, w, h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        let light = values[(h - 1 - y) * w + x];
+        if (s.shape === "moon") {
+          const u = x / (w - 1),
+            v = 1 - y / (h - 1);
+          light = Math.max(
+            0,
+            Math.min(
+              1,
+              light * (1 - s.moon) +
+                s.moon *
+                  (0.5 +
+                    0.2 *
+                      Math.sin(u * 127 + Math.sin(v * 61)) *
+                      Math.cos(v * 89)),
+            ),
+          );
+        }
+        const i = (y * w + x) * 4,
+          c = (0.07 + 0.93 * light) * 255;
+        data.data[i] = c;
+        data.data[i + 1] = c * 0.977;
+        data.data[i + 2] = c * 0.914;
+      }
+    ctx.putImageData(data, 0, 0);
+  }
+  return canvas;
 }

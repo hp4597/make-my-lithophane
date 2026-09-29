@@ -36,7 +36,7 @@ if (cliIndex >= 0) {
       event.sender !== window.webContents ||
       typeof name !== "string" ||
       !(bytes instanceof Uint8Array) ||
-      bytes.length > 512 * 1024 * 1024
+      bytes.length > 1024 * 1024 * 1024
     )
       throw new Error("Invalid file");
     const result = await dialog.showSaveDialog(window, {

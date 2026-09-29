@@ -1,3 +1,4 @@
+import { gridSize } from "./geometry.js";
 import { starterFilaments, paletteForStack } from "./color.js";
 import { sampleImage } from "./image.js";
 import { unzipSync, zipSync, strToU8 } from "fflate";
@@ -79,14 +80,11 @@ export function initAdvanced(api) {
       .forEach((e) => (e.disabled = true));
     try {
       const settings = { ...api.getSettings(), layer, colorDepth },
-        spacing = preview
-          ? Math.max(settings.width / 160, settings.height / 120)
-          : settings.resolution,
-        nx = Math.ceil(settings.width / spacing),
-        ny = Math.ceil(settings.height / spacing);
-      if (nx * ny > 250000)
-        throw new Error(
-          "Color export is limited to 250,000 cells. Increase the resolution spacing.",
+        { nx, ny } = gridSize(
+          preview ? { ...settings, resolutionMode: "image" } : settings,
+          false,
+          api.getImage(),
+          preview ? 16000000 : 1000000,
         );
       const canvas = sampleImage(api.getImage(), settings, nx, ny, true),
         rgba = canvas.getContext("2d").getImageData(0, 0, nx + 1, ny + 1).data;

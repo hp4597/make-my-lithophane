@@ -191,16 +191,18 @@ export function mergeMeshes(meshes) {
       meshes.reduce((n, m) => n + m.positions.length, 0),
     ),
     colors = new Float32Array(positions.length),
+    uvs = new Float32Array((positions.length / 3) * 2).fill(-1),
     indices = new Uint32Array(meshes.reduce((n, m) => n + m.indices.length, 0));
   let p = 0,
     j = 0;
   for (const m of meshes) {
     positions.set(m.positions, p);
+    if (m.uvs) uvs.set(m.uvs, (p / 3) * 2);
     colors.set(m.colors, p);
     for (const i of m.indices) indices[j++] = i + p / 3;
     p += m.positions.length;
   }
-  return { positions, indices, colors };
+  return { positions, indices, colors, uvs };
 }
 export function printParts(mesh, s) {
   const d = supportDimensions(s),

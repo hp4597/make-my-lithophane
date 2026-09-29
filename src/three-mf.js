@@ -1,4 +1,4 @@
-import { zipSync, strToU8 } from "fflate";
+import { Zip, ZipDeflate, strToU8 } from "fflate";
 const xmlEscape = (s) =>
   String(s)
     .replaceAll("&", "&amp;")
@@ -6,42 +6,74 @@ const xmlEscape = (s) =>
     .replaceAll('"', "&quot;")
     .replaceAll(">", "&gt;");
 export function threeMF(parts, title = "Lithophane") {
-  let resources =
-    '<basematerials id="1">' +
+  const chunks = [];
+  let failure;
+  const zip = new Zip((error, data) => {
+    if (error) failure = error;
+    else chunks.push(data);
+  });
+  const modelFile = new ZipDeflate("3D/3dmodel.model", { level: 3 });
+  zip.add(modelFile);
+  const emit = (text) => modelFile.push(strToU8(text), false);
+  emit(
+    `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><metadata name="Title">${xmlEscape(title)}</metadata><resources><basematerials id="1">`,
+  );
+  emit(
     parts
       .map(
         (p) =>
           `<base name="${xmlEscape(p.name)}" displaycolor="${p.color || "#FFFFFFFF"}"/>`,
       )
-      .join("") +
-    "</basematerials>";
+      .join(""),
+  );
+  emit("</basematerials>");
   parts.forEach((part, j) => {
-    const { positions: p, indices: i } = part.mesh,
-      vertices = [],
-      triangles = [];
-    for (let k = 0; k < p.length; k += 3)
-      vertices.push(
-        `<vertex x="${p[k].toFixed(5)}" y="${p[k + 1].toFixed(5)}" z="${p[k + 2].toFixed(5)}"/>`,
-      );
-    for (let k = 0; k < i.length; k += 3)
-      triangles.push(
-        `<triangle v1="${i[k]}" v2="${i[k + 1]}" v3="${i[k + 2]}"/>`,
-      );
-    resources += `<object id="${j + 2}" type="model" name="${xmlEscape(part.name)}" pid="1" pindex="${j}"><mesh><vertices>${vertices.join("")}</vertices><triangles>${triangles.join("")}</triangles></mesh></object>`;
+    const { positions: p, indices: i } = part.mesh;
+    emit(
+      `<object id="${j + 2}" type="model" name="${xmlEscape(part.name)}" pid="1" pindex="${j}"><mesh><vertices>`,
+    );
+    let buffer = "";
+    for (let k = 0; k < p.length; k += 3) {
+      buffer += `<vertex x="${p[k].toFixed(5)}" y="${p[k + 1].toFixed(5)}" z="${p[k + 2].toFixed(5)}"/>`;
+      if (k % 6144 === 0) {
+        emit(buffer);
+        buffer = "";
+      }
+    }
+    emit(buffer + "</vertices><triangles>");
+    buffer = "";
+    for (let k = 0; k < i.length; k += 3) {
+      buffer += `<triangle v1="${i[k]}" v2="${i[k + 1]}" v3="${i[k + 2]}"/>`;
+      if (k % 6144 === 0) {
+        emit(buffer);
+        buffer = "";
+      }
+    }
+    emit(buffer + "</triangles></mesh></object>");
   });
   const assembly = parts.length + 2;
-  resources += `<object id="${assembly}" type="model" name="${xmlEscape(title)}"><components>${parts.map((_, j) => `<component objectid="${j + 2}"/>`).join("")}</components></object>`;
-  const model = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><metadata name="Title">${xmlEscape(title)}</metadata><resources>${resources}</resources><build><item objectid="${assembly}"/></build></model>`;
-  return zipSync(
-    {
-      "[Content_Types].xml": strToU8(
-        '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>',
-      ),
-      "_rels/.rels": strToU8(
-        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>',
-      ),
-      "3D/3dmodel.model": strToU8(model),
-    },
-    { level: 3 },
+  emit(
+    `<object id="${assembly}" type="model" name="${xmlEscape(title)}"><components>${parts.map((_, j) => `<component objectid="${j + 2}"/>`).join("")}</components></object></resources><build><item objectid="${assembly}"/></build></model>`,
   );
+  modelFile.push(new Uint8Array(), true);
+  const metadata = {
+    "[Content_Types].xml":
+      '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>',
+    "_rels/.rels":
+      '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>',
+  };
+  for (const [name, text] of Object.entries(metadata)) {
+    const f = new ZipDeflate(name, { level: 3 });
+    zip.add(f);
+    f.push(strToU8(text), true);
+  }
+  zip.end();
+  if (failure) throw failure;
+  const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
 }

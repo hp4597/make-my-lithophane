@@ -38,7 +38,7 @@ lithophane-cli.cmd photos --output models --recursive --dry-run --json
 lithophane-cli.cmd photos --output models --recursive --overwrite --fail-fast
 ```
 
-Use `--help` for the complete command summary. Every numeric/string desktop setting can be passed as its kebab-case flag, such as `--hole-diameter 3`, `--text "Our trip"`, or `--resolution 0.3`. Boolean flags turn a setting on; use `--set flip=false` to turn it off. `--set key=value` uses the original camelCase setting name. Arguments after `--` are literal input paths. Shell glob expansion is not required or implemented; pass folders or explicit paths.
+Use `--help` for the complete command summary. Every numeric/string desktop setting can be passed as its kebab-case flag, such as `--hole-diameter 3`, `--text "Our trip"`, or `--resolution-mode spacing --resolution 0.3`. Boolean flags turn a setting on; use `--set flip=false` to turn it off. `--set key=value` uses the original camelCase setting name. Arguments after `--` are literal input paths. Shell glob expansion is not required or implemented; pass folders or explicit paths.
 
 A JSON profile is a partial settings object:
 
@@ -49,6 +49,7 @@ A JSON profile is a partial settings object:
   "height": 90,
   "min": 0.8,
   "max": 3.2,
+  "resolutionMode": "spacing",
   "resolution": 0.35,
   "border": 3,
   "fit": "cover"
@@ -74,3 +75,5 @@ Exports contain the selected single-photo mesh plus its matching support. `--sup
 ## Verification
 
 `npm test` covers CLI planning and file safety alongside geometry checks. `npm run test:cli` exercises actual headless image decoding and exports. After packaging, `node tests/cli-desktop.cjs --packaged` tests the CLI with the bundled Windows runtime.
+
+Native image resolution is the default in v0.4. Use `--resolution-mode image` to sample each photo at its own rotated pixel dimensions. Use `--resolution-mode spacing --resolution 0.1` for explicit millimeter spacing. Native resolution cannot be fully checked during dry-run until photos are decoded. Exports above 4 million cells fail explicitly without downsampling.

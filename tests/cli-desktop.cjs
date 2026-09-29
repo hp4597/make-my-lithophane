@@ -132,7 +132,7 @@ function run(args) {
   assert.equal(result.code, 2);
   assert.ok(JSON.parse(result.stdout).error);
   result = await run(["--version"]);
-  assert.equal(result.stdout.trim(), "0.3.0");
+  assert.equal(result.stdout.trim(), "0.4.0");
   console.log(
     `${packaged ? "Packaged" : "Source"} CLI passed: recursive batches, spaces, STL/3MF, invalid image continuation, skip protection, dry-run, JSON and exit codes.`,
   );

@@ -7,9 +7,9 @@ self.onmessage = ({ data: d }) => {
   try {
     const { nx, ny, rgba, settings: s } = d;
     validate(s);
-    if (nx * ny > 250000)
+    if (nx * ny > (d.preview ? 16000000 : 1000000))
       throw new Error(
-        "Color export exceeds 250,000 cells. Increase sample spacing or reduce dimensions.",
+        "Color export exceeds 1,000,000 cells. Increase sample spacing or reduce dimensions.",
       );
     if (d.mode === "chromaphane")
       throw new Error(
@@ -56,7 +56,7 @@ self.onmessage = ({ data: d }) => {
         [bytes.buffer],
       );
     } else {
-      const parts = colorLithophane(rgba, nx, ny, s),
+      const parts = colorLithophane(rgba, nx, ny, s, d.preview),
         files = {};
       if (d.preview) {
         self.postMessage({ expected: parts.expected, nx, ny });

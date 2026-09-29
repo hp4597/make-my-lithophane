@@ -1,3 +1,4 @@
+import { unwrapPreviewUVs } from "./preview-uv.js";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 export class Preview {
@@ -34,16 +35,35 @@ export class Preview {
       this.renderer.render(this.scene, this.camera);
     });
   }
-  update(data, reset = false) {
+  update(data, reset = false, image = null) {
+    if (
+      image &&
+      Math.max(image.width, image.height) >
+        this.renderer.capabilities.maxTextureSize
+    )
+      throw new Error(
+        `Image exceeds this GPU's ${this.renderer.capabilities.maxTextureSize}px texture limit. Use a smaller image for the 3D preview.`,
+      );
+    this.texture?.dispose();
+    this.texture = image ? new THREE.CanvasTexture(image) : null;
+    if (this.texture) {
+      this.texture.colorSpace = THREE.SRGBColorSpace;
+      this.texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+      this.texture.wrapS = THREE.RepeatWrapping;
+    }
+
     if (this.mesh) {
       this.scene.remove(this.mesh);
       this.mesh.geometry.dispose();
       this.mesh.material.dispose();
     }
+    if (data.uvs) data = unwrapPreviewUVs(data);
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
     g.setAttribute("color", new THREE.BufferAttribute(data.colors, 3));
+    if (data.uvs) g.setAttribute("uv", new THREE.BufferAttribute(data.uvs, 2));
     g.setIndex(new THREE.BufferAttribute(data.indices, 1));
+
     g.computeVertexNormals();
     g.computeBoundingBox();
     this.mesh = new THREE.Mesh(
@@ -68,6 +88,7 @@ export class Preview {
       mode === "light"
         ? new THREE.MeshBasicMaterial({
             vertexColors: true,
+            map: this.texture,
             side: THREE.DoubleSide,
           })
         : new THREE.MeshStandardMaterial({
@@ -77,6 +98,19 @@ export class Preview {
             side: THREE.DoubleSide,
             wireframe: mode === "wire",
           });
+    if (mode === "light" && this.texture)
+      this.mesh.material.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          "#include <map_fragment>",
+          `#ifdef USE_MAP
+      if(vMapUv.x >= 0.0) diffuseColor = vec4(texture2D(map,vMapUv).rgb, diffuseColor.a);
+      #endif`,
+        );
+        shader.fragmentShader = shader.fragmentShader.replace(
+          "#include <color_fragment>",
+          "#ifdef USE_COLOR\n if(vMapUv.x < 0.0) diffuseColor.rgb *= vColor;\n #endif",
+        );
+      };
   }
   reset() {
     if (!this.mesh) return;

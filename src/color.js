@@ -143,7 +143,8 @@ export function matchPainting(
 export function volumeBetween(width, height, nx, ny, bottom, top) {
   const n = (nx + 1) * (ny + 1),
     positions = new Float32Array(n * 6),
-    indices = [];
+    indices = new Uint32Array(nx * ny * 12 + (nx + ny) * 12);
+  let cursor = 0;
   for (let y = 0; y <= ny; y++)
     for (let x = 0; x <= nx; x++) {
       const k = y * (nx + 1) + x;
@@ -157,7 +158,9 @@ export function volumeBetween(width, height, nx, ny, bottom, top) {
           (k + side * n) * 3,
         );
     }
-  const quad = (a, b, c, d) => indices.push(a, b, c, a, c, d);
+  const quad = (a, b, c, d) => {
+    for (const i of [a, b, c, a, c, d]) indices[cursor++] = i;
+  };
   for (let y = 0; y < ny; y++)
     for (let x = 0; x < nx; x++) {
       const a = y * (nx + 1) + x,
@@ -173,11 +176,11 @@ export function volumeBetween(width, height, nx, ny, bottom, top) {
     }
   return {
     positions,
-    indices: new Uint32Array(indices),
+    indices,
     colors: new Float32Array(positions.length).fill(1),
   };
 }
-export function colorLithophane(rgba, nx, ny, s) {
+export function colorLithophane(rgba, nx, ny, s, predictionOnly = false) {
   const n = (nx + 1) * (ny + 1),
     channels = [new Float32Array(n), new Float32Array(n), new Float32Array(n)],
     white = new Float32Array(n);
@@ -208,7 +211,7 @@ export function colorLithophane(rgba, nx, ny, s) {
   const parts = [];
   const names = ["Cyan", "Magenta", "Yellow", "White"],
     colors = ["#00bcd4", "#dc267f", "#f2d53c", "#ffffff"];
-  for (let c = 0; c < 4; c++) {
+  for (let c = 0; !predictionOnly && c < 4; c++) {
     const depth = c < 3 ? channels[c] : white,
       top = bottom.map((z, k) => z + depth[k]);
     parts.push({

@@ -9,6 +9,7 @@ Usage: lithophane-cli <photo-or-folder> [...] --output <folder> [options]
   --shape <name>          flat, curved, cylinder, lamp, sphere, moon, heart,
                           silhouette, nightlight, box
   --width <mm> --height <mm> --min <mm> --max <mm> --resolution <mm>
+  --resolution-mode image|spacing  Native image pixels (default) or custom spacing
   --support auto|none|stand|case  Include matching support (default: auto)
   --fit-clearance <mm> --support-wall <mm> --print-gap <mm>
   --brightness <value> --contrast <value> --gamma <value>
@@ -158,6 +159,6 @@ export function resolveSettings(config, overrides) {
       "The CLI supports monochrome models only. Filament painting is paused; use the desktop color studio for CMYW. Use --set colorMode=mono to override a saved color mode.",
     );
   validate(s);
-  gridSize(s);
+  if (s.resolutionMode === "spacing") gridSize(s);
   return s;
 }

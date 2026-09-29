@@ -18,6 +18,7 @@ self.onmessage = ({ data }) => {
         mesh.positions.buffer,
         mesh.indices.buffer,
         mesh.colors.buffer,
+        mesh.uvs.buffer,
       ]);
   } catch (error) {
     self.postMessage({ id: data.id, error: error.message });

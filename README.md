@@ -2,7 +2,7 @@
 
 A local Windows desktop studio for turning photos into printable lithophanes. Photos remain on the device; no account or service is required.
 
-Version **0.3.0** adds a batch CLI. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
+Version **0.4.0** adds a batch CLI. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
 
 ## Run and build
 
@@ -17,8 +17,8 @@ npm start
 
 Double-click **`build-distribution.bat`**. It installs locked dependencies, runs geometry/export tests, and builds both executables in `release/`:
 
-- **`Make My Lithophane 0.3.0 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
-- **`Make My Lithophane Setup 0.3.0.exe`** — Windows installer with installation-folder selection and desktop shortcut.
+- **`Make My Lithophane 0.4.0 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
+- **`Make My Lithophane Setup 0.4.0.exe`** — Windows installer with installation-folder selection and desktop shortcut.
 - **`win-unpacked/Make My Lithophane.exe`** — unpacked app; keep all files in that folder together.
 
 For a terminal or CI run without a final keypress: `build-distribution.bat --no-pause`. Internet is needed for build dependencies, but the resulting app works offline. The script respects an existing `NODE_EXTRA_CA_CERTS`; otherwise it exports Windows' public trusted certificates into a temporary PEM for Node, without disabling TLS verification or changing machine settings.
@@ -34,7 +34,7 @@ For a terminal or CI run without a final keypress: `build-distribution.bat --no-
 5. Export a binary STL, or a ZIP kit containing STL, a self-contained project and printing notes. Light-box kits also include a separate enclosure. Flat color-paper kits contain a 1:1 SVG backing.
 6. Open the STL in your slicer; verify scale, orientation, islands, supports, and print settings before printing.
 
-Save/open `.litho` project files to retain the original image and all settings. Ctrl+S saves a project. Resolution controls export sample spacing; the preview is deliberately coarser. PLA mass is based on solid geometry at 1.24 g/cm³, excluding supports and brim.
+Save/open `.litho` project files to retain the original image and all settings. Ctrl+S saves a project. Native mode matches image pixel dimensions; Custom spacing controls millimeters per sample. Backlit image textures retain source resolution while interactive geometry uses a separate budget. PLA mass is based on solid geometry at 1.24 g/cm³, excluding supports and brim.
 
 ## Scope and parity
 
@@ -93,3 +93,11 @@ Width and height in the Model tab resize the panel. **Matching support: Auto** i
 CMYW kits include a matching support sized from actual combined material thickness, plus a layout 3MF preserving channel alignment. The CLI accepts `--support auto|none|stand|case`, `--fit-clearance`, `--support-wall` and `--print-gap`; its default Auto includes matching supports in batch exports.
 
 **Backlit** works on all ten shapes in monochrome and color-paper modes. Paper colors follow the edited photo and surface mapping; printable backing sheets remain limited to flat panels. The **CMYW studio** opens with a predicted backlit color image and updates it when layer height or color depth changes. Kits include `predicted.png`. These are illustrative optical previews, not calibrated filament predictions. CMYW geometry remains flat. Filament painting remains disabled and paused.
+
+## Version 0.4: native image detail
+
+New projects default to **Model > Resolution > Match image pixels (native)**. A 1600 x 1200 photo produces a 1600 x 1200 surface sample grid; 90-degree rotation swaps axes. Resizing the physical panel preserves this pixel count. Crop, fit, text and tone edits still apply to the sampled image. Custom spacing supports 0.01-2 mm. Images smaller than five pixels per axis use a minimum five-sample grid to keep shapes valid.
+
+Backlit 3D uses a native-resolution image texture rather than interpolating colors across a tiny draft mesh. Interactive geometry has a 600,000-cell budget; the viewport and export labels report their dimensions separately. CMYW predictions use native image dimensions, up to 16 million cells, without creating material meshes just for preview.
+
+**Explicit resource limits:** main exports allow 4 million cells (about 16 million triangles / 800 MB STL); CMYW kits allow 1 million cells across each of their four volumes; four-wall kits allow 150,000 cells per wall. Requests above a limit fail with an explanation and never silently downsample. Choose Custom spacing or a smaller source to fit the limit. GPU texture dimensions are hardware dependent and checked before upload. Native backlit preview does not imply that the printer can reproduce every pixel. Large models require substantial RAM and slicer capacity. ThreeMF XML is compressed in chunks to avoid constructing a huge XML string.

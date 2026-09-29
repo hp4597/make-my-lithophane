@@ -1,4 +1,4 @@
-import { defaults, buildMesh, binarySTL } from "./geometry.js";
+import { defaults, buildMesh, binarySTL, gridSize } from "./geometry.js";
 import { threeMF } from "./three-mf.js";
 import { zipSync, strToU8 } from "fflate";
 export async function makeBoxKit(photos, settings, generate, progress) {
@@ -9,13 +9,8 @@ export async function makeBoxKit(photos, settings, generate, progress) {
     files = {},
     names = ["front", "right", "back", "left"];
   // Keep assembly size manageable without silently lowering requested resolution.
-  if (
-    Math.ceil(s.width / s.resolution) * Math.ceil(s.height / s.resolution) >
-    150000
-  )
-    throw new Error(
-      "Box assembly exceeds the mesh budget. Increase resolution spacing.",
-    );
+  for (const photo of photos.slice(0, 4))
+    gridSize(s, false, photo.image, 150000);
   for (let side = 0; side < 4; side++) {
     progress(`Building light-box wall ${side + 1} of 4…`);
     const result = await generate(s, false, photos[side].image, true),
