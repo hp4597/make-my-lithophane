@@ -94,7 +94,8 @@ export function validate(s) {
   if (
     s.min < (s.colorMode === "cmyw" ? 0.04 : 0.4) ||
     s.max <= s.min ||
-    s.max > (s.colorMode === "cmyw" ? 20 : 10)
+    (!(s.colorMode === "cmyw" && s.colorStructure === "solid") &&
+      s.max > (s.colorMode === "cmyw" ? 20 : 10))
   )
     throw new Error(
       "Maximum thickness must exceed minimum thickness (0.4–10 mm).",

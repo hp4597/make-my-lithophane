@@ -63,3 +63,5 @@ Do not mark these complete based solely on similar-looking UI or successful mesh
 ### Large models (0.7.1)
 
 Removed fixed 500 mm panel dimensions, export cell budgets, smooth color cell budget and photo file/pixel caps. Native export sampling is preserved; interactive geometry still uses a lighter mesh. Smooth export writes exact-sized typed buffers instead of growing JS arrays. Invalid settings hide the stale preview and clear its statistics until a valid update completes. RAM, graphics/image platform and mesh-format limits still apply. Automatic print-bed splitting is not implemented.
+
+Version 0.7.2 also removes smooth panel total-thickness, skin-thickness and 64-layer ceilings. Exact layer multiples and sufficient interior space remain required; the exhaustive color solver can consume substantial time and memory at large internal layer counts.

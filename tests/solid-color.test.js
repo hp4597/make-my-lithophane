@@ -10,6 +10,7 @@ import {
   whiteCoupons,
 } from "../src/solid-color.js";
 import { threeMF } from "../src/three-mf.js";
+import { cmywPreviewMesh } from "../src/color.js";
 import { unzipSync, strFromU8 } from "fflate";
 const s = {
   ...defaults,
@@ -19,6 +20,37 @@ const s = {
   height: 6,
   solidFeature: 1,
 };
+test("Six mm panels and thick skins work beyond the former thickness and layer caps", () => {
+  for (const options of [
+    { solidThickness: 6, solidFront: 0.24, solidRear: 0.24 },
+    { solidThickness: 36, solidFront: 18, solidRear: 17.4 },
+  ]) {
+    const settings = { ...s, width: 40, height: 30, layer: 0.12, ...options };
+    const plan = solidPlan(photo(), 8, 6, settings);
+    assert.ok(plan.counts instanceof Uint32Array);
+    assert.equal(plan.config.layers, Math.round(options.solidThickness / 0.12));
+    const parts = solidLithophane(photo(), 8, 6, settings);
+    const volume =
+      parts.reduce((sum, p) => sum + meshStats(p.mesh).volume, 0) * 1000;
+    assert.ok(Math.abs(volume - 40 * 30 * options.solidThickness) < 0.1);
+    const preview = cmywPreviewMesh(parts, 8, 6, settings);
+    assert.ok(
+      Math.abs(meshStats(preview.mesh).dimensions[2] - options.solidThickness) <
+        0.01,
+    );
+  }
+  assert.throws(
+    () =>
+      solidConfig({
+        ...s,
+        layer: 0.12,
+        solidThickness: 6,
+        solidFront: 3,
+        solidRear: 3,
+      }),
+    /internal layers/,
+  );
+});
 function photo() {
   const p = new Uint8Array(9 * 7 * 4);
   for (let y = 0; y < 7; y++)

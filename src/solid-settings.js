@@ -19,13 +19,15 @@ export function solidConfig(s) {
     throw new Error(
       "Smooth solid color panels currently support flat panels and lightboxes.",
     );
-  for (const [key, min, max] of [
-    ["solidThickness", 0.8, 4],
-    ["solidFront", 0.08, 0.8],
-    ["solidRear", 0.08, 0.8],
+  for (const [key, label] of [
+    ["solidThickness", "Total panel thickness"],
+    ["solidFront", "White viewing skin"],
+    ["solidRear", "White rear skin"],
   ])
-    if (!Number.isFinite(s[key]) || s[key] < min || s[key] > max)
-      throw new Error(key + " is out of range.");
+    if (!Number.isFinite(s[key]) || s[key] <= 0)
+      throw new Error(label + " must be a positive number.");
+  if (!Number.isFinite(s.layer) || s.layer <= 0)
+    throw new Error("Layer height must be a positive number.");
   if (!Number.isFinite(s.solidFeature) || s.solidFeature <= 0)
     throw new Error("Minimum color feature must be a positive number.");
   const layers = Math.round(s.solidThickness / s.layer),
@@ -40,9 +42,15 @@ export function solidConfig(s) {
       throw new Error(
         "Panel and skin thicknesses must be exact multiples of the layer height.",
       );
-  if (layers > 64 || front < 1 || rear < 1 || layers - front - rear < 3)
+  if (
+    ![layers, front, rear].every(
+      (n) => Number.isSafeInteger(n) && n <= 0xffffffff,
+    )
+  )
+    throw new Error("Layer counts exceed the 32-bit material representation.");
+  if (front < 1 || rear < 1 || layers - front - rear < 3)
     throw new Error(
-      "Use at most 64 layers with at least one layer per skin and three internal layers.",
+      "Allow at least one layer per white skin and three internal layers within the total panel thickness.",
     );
   let profile;
   try {

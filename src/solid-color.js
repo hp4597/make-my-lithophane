@@ -178,7 +178,7 @@ export function solidPlan(rgba, nx, ny, s) {
         sums[cell * 3 + k] += (rgba[src + k] / 255) ** 2.2;
     }
   const lookup = palette(s, c),
-    counts = new Uint8Array(cols * rows * 4),
+    counts = new Uint32Array(cols * rows * 4),
     expected = new Float32Array(cols * rows * 3),
     cache = new Map();
   let error = 0;
@@ -258,7 +258,7 @@ export function calibrationTile(s) {
     },
     c = solidConfig(settings),
     lookup = palette(settings, c),
-    counts = new Uint8Array(36 * 4),
+    counts = new Uint32Array(36 * 4),
     patches = [];
   for (let y = 0; y < 6; y++)
     for (let x = 0; x < 6; x++) {

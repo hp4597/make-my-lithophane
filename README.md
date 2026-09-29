@@ -2,7 +2,7 @@
 
 A local Windows desktop studio for turning photos into printable lithophanes. Photos remain on the device; no account or service is required.
 
-Version **0.7.1** removes arbitrary panel-size, image-file-size and export-cell ceilings, improves smooth mesh memory use, and hides stale previews after failed updates. Version 0.7.0 added experimental smooth solid CMYW panels and calibration tiles. The studio also includes live lighting enclosures for flat panels, curved panels, cylinders, lamp shades, night lights and lightboxes, plus CMYW material export for those six shapes. The batch CLI remains available. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
+Version **0.7.2** also removes smooth-panel thickness, skin and layer-count caps. Version 0.7.1 removed arbitrary panel-size, image-file-size and export-cell ceilings, improves smooth mesh memory use, and hides stale previews after failed updates. Version 0.7.0 added experimental smooth solid CMYW panels and calibration tiles. The studio also includes live lighting enclosures for flat panels, curved panels, cylinders, lamp shades, night lights and lightboxes, plus CMYW material export for those six shapes. The batch CLI remains available. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
 
 ## Run and build
 
@@ -17,8 +17,8 @@ npm start
 
 Double-click **`build-distribution.bat`**. It installs locked dependencies, runs geometry/export tests, and builds both executables in `release/`:
 
-- **`Make My Lithophane 0.7.1 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
-- **`Make My Lithophane Setup 0.7.1.exe`** — Windows installer with installation-folder selection and desktop shortcut.
+- **`Make My Lithophane 0.7.2 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
+- **`Make My Lithophane Setup 0.7.2.exe`** — Windows installer with installation-folder selection and desktop shortcut.
 - **`win-unpacked/Make My Lithophane.exe`** — unpacked app; keep all files in that folder together.
 
 For a terminal or CI run without a final keypress: `build-distribution.bat --no-pause`. Internet is needed for build dependencies, but the resulting app works offline. The script respects an existing `NODE_EXTRA_CA_CERTS`; otherwise it exports Windows' public trusted certificates into a temporary PEM for Node, without disabling TLS verification or changing machine settings.
@@ -141,4 +141,4 @@ Calibration ZIP: a 36-patch, 36 × 36 mm multipart tile; six separate all-white 
 
 CMYW 3MF files now contain Bambu-specific **part names and 1/2/3/4 extruder hints**, with support parts assigned to White. Import/re-export through the installed Bambu Studio preserves those names and hints. Third-party import paths can ignore global process/palette hints. Explicitly configure four filaments, verify their assignments, set 100% infill, use the exported layer height and first-layer height, then inspect the layer preview. The calibration defaults require 0.08 mm layers and a 0.16 mm first layer. These files are models, not ready-to-run G-code or physically validated printer profiles. Exports use standard model import with part metadata; a complete printer profile is not included.
 
-Limits: 64 total layers, at least one layer per skin and three internal layers. There is no fixed color-cell or 500 mm dimension ceiling. Native exports preserve requested samples; interactive geometry remains lighter. Actual available RAM, GPU/canvas capabilities, 32-bit mesh indices and file-format constraints still apply; very large jobs can fail or exhaust memory. No automatic print-bed tiling is provided. Thicknesses must be exact layer multiples. CLI color export remains unavailable; use the desktop CMYW workflow. Run `npm run test:solid` for the live mode/calibration regression.
+Thickness validation: at least one layer per skin and three internal layers. Version 0.7.2 removes the 4 mm total-thickness, 0.8 mm skin and 64-layer caps. Layer counts use 32-bit storage. Enumerating material combinations grows cubically with internal layer count, so thicker panels can take substantially more time and memory. There is no fixed color-cell or 500 mm dimension ceiling. Native exports preserve requested samples; interactive geometry remains lighter. Actual available RAM, GPU/canvas capabilities, 32-bit mesh indices and file-format constraints still apply; very large jobs can fail or exhaust memory. No automatic print-bed tiling is provided. Thicknesses must be exact layer multiples. CLI color export remains unavailable; use the desktop CMYW workflow. Run `npm run test:solid` for the live mode/calibration regression.

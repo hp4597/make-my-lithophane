@@ -134,6 +134,38 @@ const { _electron: electron } = require("@playwright/test"),
     await page.locator('[data-tab="print"]').click();
     await update(() => page.locator("#small-solid").click());
     await update(() =>
+      page.locator('[data-setting="solidFront"]').fill("0.24"),
+    );
+    await update(() => page.locator('[data-setting="solidRear"]').fill("0.24"));
+    await update(() => page.locator('[data-setting="layer"]').fill("0.12"));
+    await update(() =>
+      page.locator('[data-setting="solidThickness"]').fill("6"),
+    );
+    assert.match(
+      await page.locator("#model-size").textContent(),
+      /40.0 × 30.0 × 6.0/,
+    );
+    const thickOutput = path.resolve("test-results/six-mm-solid.zip");
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, thickOutput);
+    await page.locator("#export-color").click();
+    await page.waitForFunction(
+      () => document.querySelector("#status").textContent === "Export complete",
+      null,
+      { timeout: 60000 },
+    );
+    const thickKit = unzipSync(await fs.readFile(thickOutput));
+    assert.equal(
+      JSON.parse(strFromU8(thickKit["SOLID-PANEL.json"])).layers,
+      50,
+    );
+    const thickXml = strFromU8(
+      unzipSync(thickKit["color-assembly.3mf"])["3D/3dmodel.model"],
+    );
+    assert.ok(thickXml.includes('z="6.00000"'));
+    await page.screenshot({ path: "test-results/six-mm-solid.png" });
+    await update(() =>
       page.locator('[data-setting="colorStructure"]').selectOption("relief"),
     );
     assert.equal(await page.locator("dialog[open]").count(), 0);

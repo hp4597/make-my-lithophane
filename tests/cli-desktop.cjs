@@ -151,7 +151,7 @@ function run(args) {
   assert.match(lightXML, /rear-cover/);
   assert.match(lightXML, /enclosure-foot/);
   result = await run(["--version"]);
-  assert.equal(result.stdout.trim(), "0.7.1");
+  assert.equal(result.stdout.trim(), "0.7.2");
   console.log(
     `${packaged ? "Packaged" : "Source"} CLI passed: recursive batches, spaces, STL/3MF, invalid image continuation, skip protection, dry-run, JSON and exit codes.`,
   );
