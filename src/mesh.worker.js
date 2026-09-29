@@ -1,7 +1,13 @@
 import { buildMesh, binarySTL, meshStats } from "./geometry.js";
 self.onmessage = ({ data }) => {
   try {
-    const mesh = buildMesh(data.settings, data.pixels, data.nx, data.ny);
+    const mesh = buildMesh(
+      data.settings,
+      data.pixels,
+      data.nx,
+      data.ny,
+      data.rgba,
+    );
     if (data.export === true) {
       const bytes = binarySTL(mesh);
       self.postMessage({ id: data.id, bytes, stats: meshStats(mesh) }, [

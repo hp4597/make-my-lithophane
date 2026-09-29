@@ -42,6 +42,13 @@ export function initAdvanced(api) {
     });
   function draw() {
     dialog.innerHTML = `<button class="dialog-close" data-action="close">×</button><span class="eyebrow">COLOR STUDIO</span><h2>More than shades of white.</h2><div class="button-row"><button data-mode="chromaphane" disabled title="Paused until you ask to resume">Filament painting · Work in progress</button><button data-mode="cmyw" class="${mode === "cmyw" ? "primary" : ""}">CMYW lithophane</button></div><p>${mode === "chromaphane" ? "Arrange filaments from bottom to top. The predicted image matches your photo to colors attainable at each layer of this stack." : "Create four aligned material volumes for a multicolor printer. The kit contains separate STLs and a multipart 3MF assembly."}</p><div class="field-row"><label class="field"><span>Layer height (mm)</span><input id="color-layer" type="number" min="0.04" max="0.3" step="0.01" value="${layer}"/></label>${mode === "chromaphane" ? `<label class="field"><span>Color distance</span><select id="color-algorithm"><option value="lab" ${algorithm === "lab" ? "selected" : ""}>CIELAB distance</option><option value="rgb" ${algorithm === "rgb" ? "selected" : ""}>RGB distance</option></select></label>` : `<label class="field"><span>Max color depth (mm)</span><input id="color-depth" type="number" min="0.08" max="1.6" step="0.08" value="${colorDepth}"/></label>`}</div>${mode === "chromaphane" ? `<div class="filament-header"><span>FILAMENT · BOTTOM TO TOP</span><span>TD (mm)</span><span>DEPTH (mm)</span></div><div class="filament-rows">${filaments.map((f, i) => `<div class="filament-row" data-index="${i}"><input aria-label="Filament ${i + 1} color" type="color" data-key="color" value="${f.color}"/><input aria-label="Filament ${i + 1} name" data-key="name" value="${escape(f.name)}"/><input aria-label="Filament ${i + 1} transmission distance" data-key="transmission" type="number" min="0.1" max="30" step="0.1" value="${f.transmission}"/><input aria-label="Filament ${i + 1} thickness" data-key="thickness" type="number" min="0.04" max="3" step="0.08" value="${f.thickness}"/><button data-up="${i}" title="Move down in stack">↑</button><button data-remove="${i}" title="Remove filament">×</button></div>`).join("")}</div><div class="button-row"><button data-action="add">+ Add filament</button><button data-action="save-library">Save library</button><button data-action="import-library">Import library</button></div><p class="hint">TD is the approximate depth at 99% opacity. Starter values are illustrative; enter measurements for your own filament. Arrow buttons change printing order.</p><div class="expected-image"><canvas id="expected-color" width="400" height="260"></canvas><div><b>Predicted color match</b><p id="stack-summary">Preview the selected photo with your filament stack.</p><button data-action="preview">Update color preview</button></div></div>` : `<div class="note">Experimental optical-density separation. Cyan controls red transmission, magenta controls green, yellow controls blue; white controls brightness. Calibration and physical testing are still required. Each channel has a one-layer minimum.</div>`}<div class="note">Exports use the current photo composition, width, height and resolution from the main editor. Color models are flat. 3MF colors identify parts; assign printer filaments in your slicer.</div><div class="dialog-actions"><span id="color-progress">Ready</span><button data-action="export" class="primary">Export ${mode === "chromaphane" ? "painting" : "CMYW"} kit (.zip)</button></div><input id="filament-file" type="file" accept=".json" hidden/>`;
+    if (mode === "cmyw")
+      dialog
+        .querySelector(".dialog-actions")
+        .insertAdjacentHTML(
+          "beforebegin",
+          `<div class="expected-image"><canvas id="expected-color" width="400" height="260"></canvas><div><b>Backlit color preview</b><p>Illustrative transmission from the quantized CMYW layers. Actual filament and lighting will change the result.</p><button data-action="preview">Update backlit preview</button></div></div>`,
+        );
   }
   function renderPrediction(result) {
     const canvas = dialog.querySelector("#expected-color");
@@ -96,13 +103,13 @@ export function initAdvanced(api) {
         mode,
         preview,
       });
-      if (mode === "chromaphane") renderPrediction(result);
+      if (result.expected) renderPrediction(result);
       if (!preview) {
         const files = unzipSync(result.bytes),
           target = await new Promise((resolve) => canvas.toBlob(resolve));
         files["target.png"] = new Uint8Array(await target.arrayBuffer());
         files["project.litho"] = strToU8(api.getProject());
-        if (mode === "chromaphane") {
+        if (result.expected) {
           const expected = await new Promise((resolve) =>
             dialog.querySelector("#expected-color").toBlob(resolve),
           );
@@ -132,6 +139,7 @@ export function initAdvanced(api) {
   button.onclick = () => {
     draw();
     dialog.showModal();
+    if (mode === "cmyw") process(true);
   };
   dialog.addEventListener("cancel", (e) => {
     if (working) e.preventDefault();
@@ -151,6 +159,8 @@ export function initAdvanced(api) {
       if (el.id === "color-layer") layer = Number(el.value);
       if (el.id === "color-depth") colorDepth = Number(el.value);
       if (el.id === "color-algorithm") algorithm = el.value;
+      if (mode === "cmyw" && ["color-layer", "color-depth"].includes(el.id))
+        await process(true);
       if (el.id === "filament-file" && el.files[0]) {
         const parsed = JSON.parse(await el.files[0].text());
         paletteForStack(parsed, layer);
@@ -169,6 +179,7 @@ export function initAdvanced(api) {
       if (b.dataset.mode) {
         mode = b.dataset.mode;
         draw();
+        if (mode === "cmyw") await process(true);
       }
       if (b.dataset.up !== undefined) {
         const i = Number(b.dataset.up);

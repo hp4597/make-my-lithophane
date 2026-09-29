@@ -7,8 +7,10 @@ Usage: lithophane-cli <photo-or-folder> [...] --output <folder> [options]
   --format stl|3mf        Model format (default: stl)
   --settings <file>       JSON settings or a saved .litho project's settings
   --shape <name>          flat, curved, cylinder, lamp, sphere, moon, heart,
-                          silhouette, nightlight, box (panel only)
+                          silhouette, nightlight, box
   --width <mm> --height <mm> --min <mm> --max <mm> --resolution <mm>
+  --support auto|none|stand|case  Include matching support (default: auto)
+  --fit-clearance <mm> --support-wall <mm> --print-gap <mm>
   --brightness <value> --contrast <value> --gamma <value>
   --invert --flip --holes --largest-island
   --set key=value         Any desktop model setting; repeat as needed
@@ -26,7 +28,7 @@ Examples:
 
 Folders retain their relative subpaths. PNG, JPEG and WebP are supported.
 Project files supply settings only; their embedded photos/layouts are not used.
-Exports are single-photo models; color paper, CMYW kits, mounting parts and
+Exports include a matching stand/case for supported panels; color paper, CMYW kits and
 filament painting are not CLI outputs in this revision.
 Exit codes: 0 success/skipped, 1 processing failure, 2 invalid arguments/setup,
 130 interrupted. No network, account or visible editor is required.

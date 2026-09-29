@@ -1,5 +1,9 @@
 export const defaults = {
   shape: "flat",
+  support: "auto",
+  fitClearance: 0.2,
+  supportWall: 2.4,
+  printGap: 8,
   width: 120,
   height: 90,
   min: 0.8,
@@ -51,6 +55,24 @@ export function validate(s) {
   for (const k of Object.keys(defaults))
     if (typeof defaults[k] === "number" && !Number.isFinite(s[k]))
       throw new Error(`${k} must be a number.`);
+  if (!["auto", "none", "stand", "case"].includes(s.support))
+    throw new Error("Unknown support type.");
+  if (
+    s.fitClearance < 0.05 ||
+    s.fitClearance > 2 ||
+    s.supportWall < 1 ||
+    s.supportWall > 6 ||
+    s.printGap < 2 ||
+    s.printGap > 50
+  )
+    throw new Error("Invalid support clearance, wall or print spacing.");
+  if (s.support === "case" && !["flat", "box"].includes(s.shape))
+    throw new Error("A fitted case requires a flat panel.");
+  if (
+    s.support === "stand" &&
+    !["flat", "box", "curved", "nightlight"].includes(s.shape)
+  )
+    throw new Error("A fitted stand requires a rectangular panel.");
   if (!shapes.some(([id]) => id === s.shape)) throw new Error("Unknown shape.");
   if (s.width < 20 || s.width > 500 || s.height < 20 || s.height > 500)
     throw new Error("Dimensions must be between 20 and 500 mm.");
@@ -155,7 +177,7 @@ export function tone(value, s) {
   v = Math.pow(v, 1 / s.gamma);
   return s.invert ? 1 - v : v;
 }
-export function buildMesh(s, pixels, nx, ny) {
+export function buildMesh(s, pixels, nx, ny, rgba = null) {
   validate(s);
   if (pixels.length !== (nx + 1) * (ny + 1))
     throw new Error("Image grid does not match model grid.");
@@ -230,7 +252,11 @@ export function buildMesh(s, pixels, nx, ny) {
     map.set(key, id);
     positions.push(...p);
     const c = (frame ? 0.07 : 0.07 + light * 0.93) ** 2.2;
-    colors.push(c, c * 0.95, c * 0.82);
+    if (rgba && !frame) {
+      const i = ((ny - y) * (nx + 1) + x) * 4;
+      for (let channel = 0; channel < 3; channel++)
+        colors.push((rgba[i + channel] / 255) ** 2.2 * (0.25 + light * 0.75));
+    } else colors.push(c, c * 0.95, c * 0.82);
     return id;
   }
   const active = new Uint8Array(nx * ny);

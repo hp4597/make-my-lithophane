@@ -35,6 +35,41 @@ const fs = require("node:fs/promises");
       );
       assert.ok((await page.locator("#model-triangles").textContent()) !== "—");
     }
+    await page.locator('[data-tab="print"]').click();
+    await page.locator('[data-setting="colorMode"]').selectOption("paper");
+    await page.locator('[data-view="light"]').click();
+    for (const shape of [
+      "flat",
+      "curved",
+      "cylinder",
+      "lamp",
+      "sphere",
+      "moon",
+      "heart",
+      "silhouette",
+      "nightlight",
+      "box",
+    ]) {
+      await page.locator(`[data-shape="${shape}"]`).click();
+      await page.waitForTimeout(400);
+      await page.waitForFunction(() =>
+        document.querySelector("#status").textContent.includes("Preview ready"),
+      );
+      assert.ok(
+        await page
+          .locator('[data-view="light"]')
+          .evaluate((e) => e.classList.contains("active")),
+      );
+    }
+    await page.screenshot({ path: "test-results/color-backlit.png" });
+    await page.locator('[data-shape="flat"]').click();
+    await page.locator('[data-tab="model"]').click();
+    await page.locator('[data-setting="width"]').fill("160");
+    await page.waitForTimeout(600);
+    assert.match(await page.locator("#support-size").textContent(), /128.0 mm/);
+    await page.locator('[data-setting="width"]').fill("120");
+    await page.locator('[data-tab="print"]').click();
+    await page.locator('[data-setting="colorMode"]').selectOption("mono");
     await page.locator('[data-tab="image"]').click();
     await page.locator('[data-setting="text"]').fill("Our favorite place");
     await page.locator("#rotate-photo").click();
@@ -148,6 +183,19 @@ const fs = require("node:fs/promises");
         .locator('#color-studio [data-mode="chromaphane"]')
         .isDisabled(),
     );
+    await page.waitForFunction(
+      () => document.querySelector("#expected-color")?.width !== 400,
+    );
+    const colorPixels = await page
+      .locator("#expected-color")
+      .evaluate((c) =>
+        Array.from(
+          c.getContext("2d").getImageData(0, 0, c.width, c.height).data,
+        ),
+      );
+    assert.ok(
+      colorPixels.some((v, i) => i % 4 === 0 && v !== colorPixels[i + 1]),
+    );
     await page.screenshot({ path: "test-results/color-studio.png" });
     const cmywPath = path.resolve("test-results/cmyw-kit.zip");
     await app.evaluate(({ dialog }, output) => {
@@ -165,6 +213,9 @@ const fs = require("node:fs/promises");
       { timeout: 60000 },
     );
     const cmyw = unzipSync(await fs.readFile(cmywPath));
+    assert.ok(cmyw["predicted.png"]);
+    assert.ok(cmyw["matching-support.stl"]);
+    assert.ok(cmyw["print-layout.3mf"]);
     for (const name of [
       "cyan.stl",
       "magenta.stl",

@@ -2,7 +2,7 @@
 
 A local Windows desktop studio for turning photos into printable lithophanes. Photos remain on the device; no account or service is required.
 
-Version **0.2.0** adds a batch CLI. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
+Version **0.3.0** adds a batch CLI. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
 
 ## Run and build
 
@@ -17,8 +17,8 @@ npm start
 
 Double-click **`build-distribution.bat`**. It installs locked dependencies, runs geometry/export tests, and builds both executables in `release/`:
 
-- **`Make My Lithophane 0.2.0 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
-- **`Make My Lithophane Setup 0.2.0.exe`** — Windows installer with installation-folder selection and desktop shortcut.
+- **`Make My Lithophane 0.3.0 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
+- **`Make My Lithophane Setup 0.3.0.exe`** — Windows installer with installation-folder selection and desktop shortcut.
 - **`win-unpacked/Make My Lithophane.exe`** — unpacked app; keep all files in that folder together.
 
 For a terminal or CI run without a final keypress: `build-distribution.bat --no-pause`. Internet is needed for build dependencies, but the resulting app works offline. The script respects an existing `NODE_EXTRA_CA_CERTS`; otherwise it exports Windows' public trusted certificates into a temporary PEM for Node, without disabling TLS verification or changing machine settings.
@@ -85,3 +85,11 @@ No proprietary assets, code, branding or licenses are included. A procedural sam
 **Recovery:** Edits trigger a local IndexedDB autosave after a short delay. Use Restore local autosave to recover it. Saving a `.litho` file remains the portable backup workflow. Project files include the photo library, color studio and mount settings.
 
 Run `npm run test:desktop` for the Electron/Playwright workflow suite. It exercises real renderer-to-main-process save IPC while substituting only the native file dialog in the test process.
+
+## Version 0.3: matching supports and color backlighting
+
+Width and height in the Model tab resize the panel. **Matching support: Auto** includes a stand for flat, curved and night-light panels, a fitted case for light-box panels, and no support for other shapes. Select None for panel-only exports. Stand slots follow maximum thickness plus clearance per side; the case cavity follows panel width and height. Support walls, fit clearance, print spacing and case depth are adjustable. The preview shows the assembled fit; STL and 3MF exports arrange separate parts side by side at Z=0. Kits also contain separate part STLs and `print-layout.3mf`. Check the combined footprint and orientation in your slicer. The case has an open front and a ledge, without a snap retainer; secure the panel with removable adhesive or your own retainer. Fit and stability need a physical test print.
+
+CMYW kits include a matching support sized from actual combined material thickness, plus a layout 3MF preserving channel alignment. The CLI accepts `--support auto|none|stand|case`, `--fit-clearance`, `--support-wall` and `--print-gap`; its default Auto includes matching supports in batch exports.
+
+**Backlit** works on all ten shapes in monochrome and color-paper modes. Paper colors follow the edited photo and surface mapping; printable backing sheets remain limited to flat panels. The **CMYW studio** opens with a predicted backlit color image and updates it when layer height or color depth changes. Kits include `predicted.png`. These are illustrative optical previews, not calibrated filament predictions. CMYW geometry remains flat. Filament painting remains disabled and paused.

@@ -69,7 +69,7 @@ Precedence: built-in defaults, then the settings file, then command-line overrid
 
 Exit codes: **0** success/planned/skipped, **1** one or more image-processing failures, **2** invalid arguments/settings or setup failure, **130** interruption through the launcher.
 
-This revision exports the selected single-photo mesh. A `box` shape is its panel, not an enclosure or four-photo assembly. Color paper, CMYW kits, standalone mounts, and gallery compositions remain desktop workflows.
+Exports contain the selected single-photo mesh plus its matching support. `--support auto` (default) adds a stand to flat, curved and night-light panels, a case to light-box panels, and no support to other shapes. Use `--support none` for panel-only output. `--fit-clearance` sets clearance per side; `--support-wall` and `--print-gap` control wall thickness and spacing. Parts are separated side by side at Z=0; check the combined footprint and print orientation in your slicer. Color paper, CMYW kits, standalone hardware adapters, and gallery compositions remain desktop workflows.
 
 ## Verification
 

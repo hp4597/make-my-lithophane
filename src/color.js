@@ -218,5 +218,16 @@ export function colorLithophane(rgba, nx, ny, s) {
     });
     bottom = top;
   }
+  // Invert the same quantized density model used to generate the material volumes.
+  parts.expected = new Float32Array(n * 3);
+  for (let k = 0; k < n; k++) {
+    const brightness = Math.max(
+      0.01,
+      Math.min(1, 1 - (white[k] - s.min) / (s.max - s.min)),
+    );
+    for (let c = 0; c < 3; c++)
+      parts.expected[k * 3 + c] =
+        (brightness * Math.exp((-4.60517 * channels[c][k]) / maxColor)) ** 2.2;
+  }
   return parts;
 }

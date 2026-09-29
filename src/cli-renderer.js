@@ -1,3 +1,4 @@
+import { printParts, mergeMeshes } from "./supports.js";
 import { loadImage, sampleImage } from "./image.js";
 import {
   validate,
@@ -17,9 +18,10 @@ window.renderCLI = async ({ source, settings, format }) => {
   const { nx, ny } = gridSize(settings),
     pixels = sampleImage(image, settings, nx, ny),
     mesh = buildMesh(settings, pixels, nx, ny);
+  const parts = printParts(mesh, settings);
   const bytes =
     format === "3mf"
-      ? threeMF([{ name: "Lithophane", color: "#F1E8D5", mesh }])
-      : binarySTL(mesh);
+      ? threeMF(parts)
+      : binarySTL(mergeMeshes(parts.map((p) => p.mesh)));
   return { bytes, stats: meshStats(mesh) };
 };

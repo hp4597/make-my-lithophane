@@ -1,3 +1,12 @@
+import {
+  supportDimensions,
+  printParts,
+  mergeMeshes,
+  assembledPreview,
+  makeCase,
+  makeStand,
+  supportNotes,
+} from "./supports.js";
 import { createIcons, icons } from "lucide";
 import { zipSync, strToU8 } from "fflate";
 import {
@@ -65,6 +74,12 @@ function generate(
         id,
         settings: s,
         pixels,
+        rgba:
+          s.colorMode === "paper"
+            ? sampleImage(source, s, nx, ny, true)
+                .getContext("2d")
+                .getImageData(0, 0, nx + 1, ny + 1).data
+            : null,
         nx,
         ny,
         export: returnMesh ? "mesh" : !preview,
@@ -78,7 +93,7 @@ $("#app").innerHTML = `
 <header><div class="brand"><span class="brand-mark">${icon("layers-3")}</span><div>make my <b>lithophane</b><small>DESKTOP STUDIO</small></div></div><div class="project-title"><span class="dot"></span><input id="project-name" aria-label="Project name" value="Untitled project"/><span class="badge">LOCAL</span></div><div class="header-actions"><button id="open-project">${icon("folder-open")} Open</button><button id="save-project">${icon("save")} Save project</button><button class="primary" id="export-top">${icon("download")} Export model</button></div></header>
 <div class="workspace"><aside class="left"><div class="section-heading"><span>YOUR PHOTO</span><span class="step">01</span></div><button class="photo-card" id="upload"><img id="photo-thumb" alt="Current source image"/><span>${icon("image-plus")} Change photo</span></button><div class="photo-caption"><span id="filename"></span><button id="reset-image" title="Reset photo adjustments">${icon("rotate-ccw")}</button></div><button class="upload-secondary" id="add-photo">${icon("upload")} Import photo</button><p class="hint">PNG, JPG or WebP · processed on your device</p><div class="section-heading spaced"><span>CHOOSE A SHAPE</span><span class="step">02</span></div><div class="shape-grid">${shapes.map(([id, label, glyph]) => `<button class="shape ${id === "flat" ? "selected" : ""}" data-shape="${id}">${icon(glyph)}<span>${label}</span></button>`).join("")}</div><div class="local-note">${icon("shield-check")}<div><b>Your memories stay yours.</b><br/>No uploads. No account. Works offline.</div></div><button id="guide" class="guide-button">${icon("book-open")} Printing & feature guide ${icon("arrow-up-right")}</button></aside>
 <main><div class="canvas-bar"><div><span class="eyebrow">WORKSPACE</span><h1 id="shape-title">Flat panel</h1></div><div class="view-modes"><button data-view="solid" class="active">${icon("box")} Solid</button><button data-view="light">${icon("sun")} Backlit</button><button data-view="wire">${icon("grid-3x3")} Mesh</button></div></div><div id="viewport"><div class="preview-label"><span class="dot"></span> LIVE 3D PREVIEW <span id="preview-quality">Draft mesh</span></div><div class="viewport-tools"><button id="reset-view" title="Fit model">${icon("maximize")}</button><button id="front-view" title="Front view">${icon("scan-face")}</button><button id="grid-toggle" title="Toggle build grid">${icon("grid-2x2")}</button><button id="screenshot" title="Save preview image">${icon("camera")}</button></div><div class="canvas-hint">${icon("mouse")} Drag to orbit <span>·</span> Scroll to zoom <span>·</span> Right-drag to pan</div><div id="busy-indicator" hidden>Generating model…</div></div><div class="model-info"><div><span>MODEL SIZE</span><strong id="model-size">—</strong></div><div><span>EST. SOLID PLA</span><strong id="model-weight">—</strong></div><div><span>PREVIEW TRIANGLES</span><strong id="model-triangles">—</strong></div><div class="quality-note">${icon("sparkles")} Full detail on export</div></div><div class="bottom-tip">${icon("lightbulb")} <span>A little light makes all the difference. Switch to <b>Backlit</b> to inspect the image.</span></div></main>
-<aside class="right"><div class="settings-tabs"><button data-tab="model" class="active">Model</button><button data-tab="image">Image</button><button data-tab="print">Print & color</button></div><div id="settings-panel"></div><div class="export-section"><div class="export-summary"><span id="export-spacing">0.35 mm detail</span><span>STL · millimeters</span></div><button class="primary export-button" id="export">${icon("download")} Export STL ${icon("arrow-right")}</button><button id="export-3mf">Export 3MF model</button><button id="export-kit">Export project kit (.zip)</button><p>Includes model, settings and printing notes.</p></div></aside></div><footer><span><span class="dot"></span> <span id="status">Ready to create</span></span><span>MAKE MY LITHOPHANE <b>v0.2</b> <span class="separator">/</span> OFFLINE STUDIO</span></footer>
+<aside class="right"><div class="settings-tabs"><button data-tab="model" class="active">Model</button><button data-tab="image">Image</button><button data-tab="print">Print & color</button></div><div id="settings-panel"></div><div class="export-section"><div class="export-summary"><span id="export-spacing">0.35 mm detail</span><span>STL · millimeters</span></div><button class="primary export-button" id="export">${icon("download")} Export STL ${icon("arrow-right")}</button><button id="export-3mf">Export 3MF model</button><button id="export-kit">Export project kit (.zip)</button><p>Includes model, settings and printing notes.</p></div></aside></div><footer><span><span class="dot"></span> <span id="status">Ready to create</span></span><span>MAKE MY LITHOPHANE <b>v0.3</b> <span class="separator">/</span> OFFLINE STUDIO</span></footer>
 <input id="image-file" type="file" accept="image/png,image/jpeg,image/webp" hidden/><input id="project-file" type="file" accept=".litho,.json" hidden/><dialog id="guide-modal"><button id="close-guide" class="dialog-close">${icon("x")}</button><span class="eyebrow">FROM PHOTO TO PRINT</span><h2>A memory you can hold.</h2><p>Import a photo, choose a shape, adjust thickness, then export an STL in millimeters for your slicer. The preview uses a lighter mesh; exported detail follows your resolution setting.</p><h3>Starting points</h3><ul><li>White PLA, 0.12 mm layers, 100% infill, and slow outer walls are useful starting settings. Tune them for your printer.</li><li>Print flat panels upright with a brim for stability. Check supports for curved parts, hearts, and spheres in your slicer.</li><li>Test a small thickness calibration strip with your filament and light source before a full print.</li><li>Use a low-heat LED light source and leave space for ventilation.</li></ul><h3>What this version supports</h3><p>Flat and curved panels, open cylinders and tapered lamps, spheres with a bottom opening, procedural moon relief, hearts, threshold silhouettes, curved night-light panels, and light-box panels with a separate enclosure. Rotate, mirror, crop, adjust tone, add text, save projects, export STL and 1:1 color sheets.</p><h3>Limits & experimental features</h3><p>Backlit view is an illustration, not a calibrated light simulation. Moon relief is procedural, not a lunar map. Silhouettes can contain disconnected islands. Night-light panels have no hardware-specific clips. The color studio supports experimental CMYW material volumes. Filament painting is Work in progress and is paused until explicitly requested. Photo libraries support collages, panoramas, and batch panels. The hardware workshop produces separate generic rings, spoke adapters, stands and U-channel clips. Color accuracy and hardware fit require physical calibration. This is an independent app, not verified feature-for-feature parity with Lithophane Maker Desktop.</p><button id="calibration" class="primary">Export thickness calibration strip</button></dialog><div id="toast" role="status"></div>`;
 const preview = new Preview($("#viewport"));
 function refreshIcons() {
@@ -98,7 +113,7 @@ function renderSettings() {
     sphere = ["sphere", "moon"].includes(settings.shape);
   let html = "";
   if (activeTab === "model")
-    html = `<div class="panel-title">Dimensions <span>01</span></div><div class="field-row">${field("width", round ? "Inner diameter" : "Width", 20, 500)}${sphere ? "" : field("height", "Height", 20, 500)}</div><p class="hint">${round ? "Diameter is measured at the inner base." : "Width follows the surface, including the border."}</p><div class="panel-title">Thickness <span>02</span></div><div class="field-row">${field("min", "Minimum", 0.4, 9.9, 0.1)}${field("max", "Maximum", 0.5, 10, 0.1)}</div><div class="thickness-scale"><span>Light areas</span><span>Dark areas</span></div><div class="gradient-scale"></div><div class="panel-title">Detail & finish <span>03</span></div>${field("resolution", "Resolution", 0.15, 2, 0.05, "mm / sample")}<p class="hint">Smaller values capture more detail and create larger files.</p>${!round ? range("border", "Solid border", 0, 15, 0.5, " mm") : ""}${["curved", "nightlight"].includes(settings.shape) ? range("angle", "Curve angle", 10, 300, 1, "°") : ""}${settings.shape === "lamp" ? range("taper", "Top / base diameter", 0.3, 1.5, 0.05) : ""}${sphere ? field("opening", "Bottom opening diameter", 5, settings.width - 8, 1) : ""}${settings.shape === "moon" ? range("moon", "Procedural lunar texture", 0, 1, 0.05) : ""}${settings.shape === "silhouette" ? range("threshold", "Keep tones darker than", 0.05, 1, 0.01) : ""}${settings.shape === "box" ? field("boxDepth", "Enclosure depth", 15, 100, 1) : ""}<div class="note">${icon("info")}<span>${sphere ? "Sphere has a closed top and an open bottom for an LED." : settings.shape === "nightlight" ? "Curved panel only. Hardware-specific clips are not included." : settings.shape === "box" ? "Export a kit to include an open-front enclosure. Fit clearance: 0.4 mm per side." : settings.shape === "silhouette" ? "White regions are removed. Check disconnected islands in your slicer." : "Dark pixels create thicker material; light pixels let more light through."}</span></div>`;
+    html = `<div class="panel-title">Dimensions <span>01</span></div><div class="field-row">${field("width", round ? "Inner diameter" : "Width", 20, 500)}${sphere ? "" : field("height", "Height", 20, 500)}</div><p class="hint">${round ? "Diameter is measured at the inner base." : "Width follows the surface, including the border."}</p><div class="panel-title">Thickness <span>02</span></div><div class="field-row">${field("min", "Minimum", 0.4, 9.9, 0.1)}${field("max", "Maximum", 0.5, 10, 0.1)}</div><div class="thickness-scale"><span>Light areas</span><span>Dark areas</span></div><div class="gradient-scale"></div><div class="panel-title">Detail & finish <span>03</span></div>${field("resolution", "Resolution", 0.15, 2, 0.05, "mm / sample")}<p class="hint">Smaller values capture more detail and create larger files.</p>${!round ? range("border", "Solid border", 0, 15, 0.5, " mm") : ""}${["curved", "nightlight"].includes(settings.shape) ? range("angle", "Curve angle", 10, 300, 1, "°") : ""}${settings.shape === "lamp" ? range("taper", "Top / base diameter", 0.3, 1.5, 0.05) : ""}${sphere ? field("opening", "Bottom opening diameter", 5, settings.width - 8, 1) : ""}${settings.shape === "moon" ? range("moon", "Procedural lunar texture", 0, 1, 0.05) : ""}${settings.shape === "silhouette" ? range("threshold", "Keep tones darker than", 0.05, 1, 0.01) : ""}${settings.shape === "box" ? field("boxDepth", "Enclosure depth", 15, 100, 1) : ""}<div class="note">${icon("info")}<span>${sphere ? "Sphere has a closed top and an open bottom for an LED." : settings.shape === "nightlight" ? "Curved panel only. Hardware-specific clips are not included." : settings.shape === "box" ? "Auto support includes a fitted open-front case with an adjustable clearance." : settings.shape === "silhouette" ? "White regions are removed. Check disconnected islands in your slicer." : "Dark pixels create thicker material; light pixels let more light through."}</span></div>`;
   if (activeTab === "model" && settings.shape === "silhouette")
     html += check("largestIsland", "Keep only the largest connected shape");
   if (activeTab === "image")
@@ -116,6 +131,8 @@ function renderSettings() {
     html += `<div class="panel-title">Hanging holes</div>${check("holes", "Two holes in the top border")}${field("holeDiameter", "Hole diameter", 1, 10, 0.1)}<p class="hint">Set the border at least 2 mm wider than the holes. Preview resolution may simplify small openings.</p>`;
   if (activeTab === "print")
     html += `<div class="panel-title">Advanced color workflows</div><button id="launch-color" class="wide">Open color lithophane studio</button><p class="hint">CMYW material volumes and 3MF assemblies. Filament painting: Work in progress.</p>`;
+  if (activeTab === "model")
+    html += `<div class="panel-title">Matching support</div><label class="field"><span>Include with exports</span><select data-setting="support">${["auto", "none", "stand", "case"].map((v) => `<option value="${v}" ${settings.support === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>${field("fitClearance", "Fit clearance / side", 0.05, 2, 0.05)}${field("supportWall", "Support wall", 1, 6, 0.1)}${field("printGap", "Print spacing", 2, 50, 1)}${settings.shape !== "box" ? field("boxDepth", "Case depth", 15, 100, 1) : ""}<p class="hint" id="support-size">Support follows panel dimensions automatically.</p>`;
   $("#settings-panel").innerHTML = html;
   if (activeTab === "image") $('[data-setting="text"]').value = settings.text;
   refreshIcons();
@@ -139,7 +156,17 @@ function schedule(reset = false) {
       status("Updating preview…");
       const result = await generate({ ...settings });
       if (current !== revision) return;
-      preview.update(result.mesh, reset);
+      preview.update(assembledPreview(result.mesh, settings), reset);
+      const d = supportDimensions(settings),
+        summary = $("#support-size");
+      if (summary)
+        summary.textContent =
+          d.type === "none"
+            ? "Panel only for this shape."
+            : d.type === "case"
+              ? `Case: ${d.width.toFixed(1)}  /  ${d.height.toFixed(1)}  /  ${d.depth.toFixed(1)} mm`
+              : `Stand: ${d.length.toFixed(1)} mm along panel  /  ${d.slot.toFixed(2)} mm slot  /  ${d.insertion.toFixed(1)} mm insertion`;
+
       const st = result.stats;
       $("#model-size").textContent =
         st.dimensions.map((x) => x.toFixed(1)).join(" × ") + " mm";
@@ -220,19 +247,31 @@ async function exportModel(kit = false) {
   await withBusy(async () => {
     status("Generating full-resolution STL…");
     const s = { ...settings },
-      result = await generate(s, false);
+      result = await generate(s, false, composedImage(), true);
+    const parts = printParts(result.mesh, s);
     if (!kit) {
-      if (await saveFile(projectName() + ".stl", result.bytes))
+      if (
+        await saveFile(
+          projectName() + ".stl",
+          binarySTL(mergeMeshes(parts.map((p) => p.mesh))),
+        )
+      )
         toast("STL saved. Open it in your slicer to prepare the print.");
     } else {
       const files = {
-        "lithophane.stl": result.bytes,
+        "lithophane.stl": binarySTL(result.mesh),
+        "print-layout.3mf": threeMF(parts),
         "project.litho": strToU8(projectData()),
-        "PRINTING.txt": strToU8(notes(s, result.stats)),
+        "PRINTING.txt": strToU8(
+          notes(s, result.stats) + "\n" + supportNotes(s),
+        ),
       };
       if (s.colorMode === "paper" && ["flat", "box"].includes(s.shape))
         files["color-backing.svg"] = strToU8(colorSheet());
-      if (s.shape === "box") files["enclosure.stl"] = await enclosureSTL(s);
+      if (supportDimensions(s).type === "case")
+        files["enclosure.stl"] = binarySTL(makeCase(s));
+      if (supportDimensions(s).type === "stand")
+        files["stand.stl"] = binarySTL(makeStand(s));
       if (
         await saveFile(projectName() + "-kit.zip", zipSync(files, { level: 3 }))
       )
@@ -269,28 +308,6 @@ async function calibration() {
     if (await saveFile("calibration-0.8-to-3.2mm.stl", bytes))
       toast("10 steps from 0.8 mm to 3.2 mm, left to right.");
   });
-}
-async function enclosureSTL(s) {
-  // One closed, connected shell: height field with a deep border and thin back.
-  const { buildMesh, binarySTL } = await import("./geometry.js");
-  const box = {
-    ...defaults,
-    shape: "flat",
-    width: s.width + 4.8,
-    height: s.height + 4.8,
-    min: 2,
-    max: s.boxDepth,
-    border: 2,
-  };
-  // Geometry validator caps photo thickness at 10 mm; construct shell from valid mesh then extend its rim.
-  const meshSettings = { ...box, max: 10 };
-  const nx = Math.ceil(box.width / 0.4),
-    ny = Math.ceil(box.height / 0.4),
-    pixels = new Float32Array((nx + 1) * (ny + 1)).fill(1);
-  const mesh = buildMesh(meshSettings, pixels, nx, ny);
-  for (let i = 2; i < mesh.positions.length; i += 3)
-    if (mesh.positions[i] > 9) mesh.positions[i] = s.boxDepth;
-  return binarySTL(mesh);
 }
 async function setPhoto(src, name) {
   const loaded = await loadImage(src);
@@ -333,7 +350,8 @@ document.addEventListener("input", (event) => {
   schedule();
 });
 document.addEventListener("change", (event) => {
-  if (event.target.dataset.setting === "colorMode") renderSettings();
+  if (["colorMode", "support"].includes(event.target.dataset.setting))
+    renderSettings();
 });
 document.addEventListener("click", async (event) => {
   const b = event.target.closest("button");
@@ -386,10 +404,7 @@ document.addEventListener("click", async (event) => {
           if (
             await saveFile(
               projectName() + ".3mf",
-              threeMF(
-                [{ name: "Lithophane", color: "#F1E8D5", mesh: result.mesh }],
-                projectName(),
-              ),
+              threeMF(printParts(result.mesh, settings), projectName()),
             )
           )
             toast("3MF model saved in millimeters.");
@@ -585,13 +600,16 @@ photoLibrary = initLibrary({
       let total = 0;
       for (let i = 0; i < photos.length; i++) {
         status(`Generating panel ${i + 1} of ${photos.length}…`);
-        const result = await generate(s, false, photos[i].image);
-        total += result.bytes.length;
+        const result = await generate(s, false, photos[i].image, true);
+        const bytes = binarySTL(
+          mergeMeshes(printParts(result.mesh, s).map((p) => p.mesh)),
+        );
+        total += bytes.length;
         if (total > 300 * 1024 * 1024)
           throw new Error(
             "Batch exceeds 300 MB. Use fewer photos or increase spacing.",
           );
-        files[`panel-${i + 1}.stl`] = result.bytes;
+        files[`panel-${i + 1}.stl`] = bytes;
       }
       files["project.litho"] = strToU8(projectData());
       if (

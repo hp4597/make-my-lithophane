@@ -1,3 +1,4 @@
+import { printParts, mergeMeshes, bounds, supportNotes } from "./supports.js";
 import { matchPainting, colorLithophane } from "./color.js";
 import { buildMesh, binarySTL, meshStats, validate } from "./geometry.js";
 import { threeMF } from "./three-mf.js";
@@ -57,6 +58,34 @@ self.onmessage = ({ data: d }) => {
     } else {
       const parts = colorLithophane(rgba, nx, ny, s),
         files = {};
+      if (d.preview) {
+        self.postMessage({ expected: parts.expected, nx, ny });
+        return;
+      }
+      const fitted = {
+        ...s,
+        shape: s.shape === "box" ? "box" : "flat",
+        max: bounds(mergeMeshes(parts.map((p) => p.mesh))).max[2],
+      };
+      const layout = printParts(mergeMeshes(parts.map((p) => p.mesh)), fitted);
+      if (layout.length > 1) {
+        files["matching-support.stl"] = binarySTL(layout[1].mesh);
+        files["SUPPORT.txt"] = strToU8(supportNotes(fitted));
+        // Preserve material alignment and place the support alongside it.
+        const pb = bounds(parts[0].mesh),
+          shift = [-pb.min[0], -pb.min[1], 0];
+        const shifted = parts.map((p) => ({
+          ...p,
+          mesh: {
+            ...p.mesh,
+            positions: p.mesh.positions.map((v, i) => v + shift[i % 3]),
+          },
+        }));
+        files["print-layout.3mf"] = threeMF(
+          [...shifted, layout[1]],
+          "CMYW with matching support",
+        );
+      }
       for (const part of parts)
         files[part.name.toLowerCase() + ".stl"] = binarySTL(part.mesh);
       files["color-assembly.3mf"] = threeMF(parts, "CMYW lithophane");
@@ -65,7 +94,9 @@ self.onmessage = ({ data: d }) => {
       );
       files["settings.json"] = strToU8(JSON.stringify(s, null, 2));
       const bytes = zipSync(files, { level: 3 });
-      self.postMessage({ bytes }, [bytes.buffer]);
+      self.postMessage({ bytes, expected: parts.expected, nx, ny }, [
+        bytes.buffer,
+      ]);
     }
   } catch (error) {
     self.postMessage({ error: error.message });
