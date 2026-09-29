@@ -1,0 +1,433 @@
+export const defaults = {
+  shape: "flat",
+  width: 120,
+  height: 90,
+  min: 0.8,
+  max: 3.2,
+  resolution: 0.35,
+  border: 3,
+  angle: 100,
+  taper: 0.8,
+  opening: 28,
+  boxDepth: 35,
+  brightness: 0,
+  contrast: 0,
+  gamma: 1,
+  invert: false,
+  flip: false,
+  rotation: 0,
+  zoom: 1,
+  panX: 0,
+  panY: 0,
+  fit: "cover",
+  text: "",
+  textSize: 12,
+  threshold: 0.9,
+  moon: 0.25,
+  layer: 0.08,
+  levels: 5,
+  colorMode: "mono",
+  hue: 0,
+  saturation: 0,
+  waves: 0,
+  waveDepth: 0,
+  holes: false,
+  holeDiameter: 3,
+  largestIsland: false,
+};
+export const shapes = [
+  ["flat", "Flat panel", "rectangle-horizontal"],
+  ["curved", "Curved panel", "shell"],
+  ["cylinder", "Cylinder", "cylinder"],
+  ["lamp", "Lamp shade", "lamp"],
+  ["sphere", "Sphere", "globe"],
+  ["moon", "Moon lamp", "moon"],
+  ["heart", "Heart", "heart"],
+  ["silhouette", "Silhouette", "scan"],
+  ["nightlight", "Night light", "lightbulb"],
+  ["box", "Light box", "box"],
+];
+export function validate(s) {
+  for (const k of Object.keys(defaults))
+    if (typeof defaults[k] === "number" && !Number.isFinite(s[k]))
+      throw new Error(`${k} must be a number.`);
+  if (!shapes.some(([id]) => id === s.shape)) throw new Error("Unknown shape.");
+  if (s.width < 20 || s.width > 500 || s.height < 20 || s.height > 500)
+    throw new Error("Dimensions must be between 20 and 500 mm.");
+  if (s.min < 0.4 || s.max <= s.min || s.max > 10)
+    throw new Error(
+      "Maximum thickness must exceed minimum thickness (0.4–10 mm).",
+    );
+  if (s.resolution < 0.15 || s.resolution > 2)
+    throw new Error("Resolution must be 0.15–2 mm.");
+  if (s.border < 0 || s.border >= Math.min(s.width, s.height) / 3)
+    throw new Error("Border is too large for this panel.");
+  if (s.angle < 10 || s.angle > 300 || s.taper < 0.3 || s.taper > 1.5)
+    throw new Error("Invalid curvature or taper.");
+  if (
+    ["sphere", "moon"].includes(s.shape) &&
+    (s.opening < 5 || s.opening >= s.width - 2 * s.max)
+  )
+    throw new Error("Sphere opening must be smaller than its inner diameter.");
+  if (
+    s.boxDepth < 15 ||
+    s.boxDepth > 100 ||
+    s.threshold < 0.05 ||
+    s.threshold > 1 ||
+    s.moon < 0 ||
+    s.moon > 1 ||
+    !Number.isInteger(s.levels)
+  )
+    throw new Error("Invalid shape settings.");
+  if (
+    s.zoom < 1 ||
+    s.zoom > 4 ||
+    s.gamma < 0.2 ||
+    s.gamma > 3 ||
+    s.levels < 2 ||
+    s.levels > 12 ||
+    s.layer < 0.04 ||
+    s.layer > 0.3
+  )
+    throw new Error("Invalid image or layer settings.");
+  if (
+    !["mono", "paper", "painting"].includes(s.colorMode) ||
+    !["cover", "contain"].includes(s.fit) ||
+    ![0, 90, 180, 270].includes(s.rotation)
+  )
+    throw new Error("Invalid image mode.");
+  if (
+    typeof s.text !== "string" ||
+    s.text.length > 80 ||
+    s.textSize < 3 ||
+    s.textSize > 30 ||
+    Math.abs(s.panX) > 100 ||
+    Math.abs(s.panY) > 100 ||
+    Math.abs(s.brightness) > 100 ||
+    s.contrast < -90 ||
+    s.contrast > 100
+  )
+    throw new Error("Image adjustment is out of range.");
+  if (
+    Math.abs(s.hue) > 180 ||
+    s.saturation < -100 ||
+    s.saturation > 100 ||
+    s.waves < 0 ||
+    s.waves > 24 ||
+    !Number.isInteger(s.waves) ||
+    s.waveDepth < 0 ||
+    s.waveDepth > 5 ||
+    s.holeDiameter < 1 ||
+    s.holeDiameter > 10
+  )
+    throw new Error("Invalid color, wave or mounting-hole settings.");
+  if (s.holes && s.border < s.holeDiameter + 2)
+    throw new Error(
+      "Hanging holes need a border at least 2 mm wider than the hole diameter.",
+    );
+}
+export function gridSize(s, preview = false) {
+  const spherical = ["sphere", "moon"].includes(s.shape);
+  const round = ["cylinder", "lamp", "sphere", "moon"].includes(s.shape);
+  const w = round ? s.width * Math.PI : s.width;
+  const h = spherical
+    ? (s.width / 2) * (Math.PI / 2 + Math.acos(s.opening / s.width))
+    : s.height;
+  const scale = preview
+    ? Math.max(s.resolution, w / 200, h / 160)
+    : s.resolution;
+  const nx = Math.max(4, Math.ceil(w / scale)),
+    ny = Math.max(4, Math.ceil(h / scale));
+  if (nx * ny > 750000)
+    throw new Error(
+      "Model exceeds 750,000 cells. Increase resolution spacing or reduce dimensions.",
+    );
+  return { nx, ny };
+}
+export function tone(value, s) {
+  let v = Math.max(
+    0,
+    Math.min(
+      1,
+      (value - 0.5) * (1 + s.contrast / 100) + 0.5 + s.brightness / 100,
+    ),
+  );
+  v = Math.pow(v, 1 / s.gamma);
+  return s.invert ? 1 - v : v;
+}
+export function buildMesh(s, pixels, nx, ny) {
+  validate(s);
+  if (pixels.length !== (nx + 1) * (ny + 1))
+    throw new Error("Image grid does not match model grid.");
+  const positions = [],
+    indices = [],
+    colors = [],
+    map = new Map();
+  const periodic = ["cylinder", "lamp", "sphere", "moon"].includes(s.shape);
+  const sphere = ["sphere", "moon"].includes(s.shape);
+  const radius = s.width / 2;
+  const bottomLatitude = sphere ? -Math.acos(s.opening / s.width) : 0;
+  function vertex(x, y, back) {
+    // Weld full-wrap seams and the sphere's north pole by index, not tolerance.
+    if (periodic && x === nx) x = 0;
+    if (sphere && y === ny) x = 0;
+    const key = `${x},${y},${back}`;
+    if (map.has(key)) return map.get(key);
+    const u = x / nx,
+      v = y / ny;
+    let light = pixels[y * (nx + 1) + x];
+    if (s.shape === "moon")
+      light = Math.max(
+        0,
+        Math.min(
+          1,
+          light * (1 - s.moon) +
+            s.moon *
+              (0.5 +
+                0.2 * Math.sin(u * 127 + Math.sin(v * 61)) * Math.cos(v * 89)),
+        ),
+      );
+    const frame =
+      !periodic &&
+      (u * s.width < s.border ||
+        (1 - u) * s.width < s.border ||
+        v * s.height < s.border ||
+        (1 - v) * s.height < s.border);
+    let thick = frame ? s.max : s.min + (1 - light) * (s.max - s.min);
+    if (s.colorMode === "painting" && !frame)
+      thick =
+        s.min +
+        (Math.round(light * (s.levels - 1)) / (s.levels - 1)) * (s.max - s.min);
+    const d = back ? 0 : thick;
+    let p;
+    if (sphere) {
+      const lat = bottomLatitude + v * (Math.PI / 2 - bottomLatitude),
+        a = (u - 0.5) * Math.PI * 2;
+      const r = radius + d;
+      p = [
+        r * Math.cos(lat) * Math.sin(a),
+        r * Math.sin(lat),
+        r * Math.cos(lat) * Math.cos(a),
+      ];
+    } else if (periodic) {
+      const a = (u - 0.5) * Math.PI * 2,
+        r =
+          radius * (s.shape === "lamp" ? 1 + (s.taper - 1) * v : 1) +
+          d +
+          (s.shape === "lamp" ? s.waveDepth * Math.sin(s.waves * a) : 0);
+      p = [r * Math.sin(a), (v - 0.5) * s.height, r * Math.cos(a)];
+    } else if (["curved", "nightlight"].includes(s.shape)) {
+      const angle = (s.angle * Math.PI) / 180,
+        r = s.width / angle,
+        a = (u - 0.5) * angle;
+      p = [
+        (r + d) * Math.sin(a),
+        (v - 0.5) * s.height,
+        (r + d) * Math.cos(a) - r,
+      ];
+    } else p = [(u - 0.5) * s.width, (v - 0.5) * s.height, d];
+    const id = positions.length / 3;
+    map.set(key, id);
+    positions.push(...p);
+    const c = (frame ? 0.07 : 0.07 + light * 0.93) ** 2.2;
+    colors.push(c, c * 0.95, c * 0.82);
+    return id;
+  }
+  const active = new Uint8Array(nx * ny);
+  for (let y = 0; y < ny; y++)
+    for (let x = 0; x < nx; x++) {
+      const u = (x + 0.5) / nx,
+        v = (y + 0.5) / ny;
+      let on = true;
+      if (s.shape === "heart") {
+        const a = (u - 0.5) * 2.4,
+          b = (v - 0.45) * 2.6;
+        on = (a * a + b * b - 1) ** 3 - a * a * b ** 3 <= 0;
+      }
+      if (s.shape === "silhouette")
+        on =
+          (pixels[y * (nx + 1) + x] +
+            pixels[y * (nx + 1) + x + 1] +
+            pixels[(y + 1) * (nx + 1) + x] +
+            pixels[(y + 1) * (nx + 1) + x + 1]) /
+            4 <
+          s.threshold;
+      if (
+        s.holes &&
+        ["flat", "curved", "box", "nightlight"].includes(s.shape)
+      ) {
+        const px = u * s.width,
+          py = v * s.height;
+        for (const hx of [s.border / 2, s.width - s.border / 2])
+          if (
+            Math.hypot(px - hx, py - (s.height - s.border / 2)) <
+            s.holeDiameter / 2
+          )
+            on = false;
+      }
+      active[y * nx + x] = on ? 1 : 0;
+    }
+  if (s.shape === "silhouette") {
+    // Bridge point-only diagonal contacts so extrusion does not produce an
+    // edge shared by four faces. Each cell can be added at most once.
+    const queue = [];
+    for (let y = 1; y < ny; y++)
+      for (let x = 1; x < nx; x++) queue.push(y * (nx + 1) + x);
+    for (let head = 0; head < queue.length; head++) {
+      const y = Math.floor(queue[head] / (nx + 1)),
+        x = queue[head] % (nx + 1);
+      if (x <= 0 || x >= nx || y <= 0 || y >= ny) continue;
+      const a = (y - 1) * nx + x - 1,
+        b = a + 1,
+        c = y * nx + x - 1,
+        d = c + 1;
+      let changed = -1;
+      if (active[a] && active[d] && !active[b] && !active[c]) changed = b;
+      else if (active[b] && active[c] && !active[a] && !active[d]) changed = a;
+      if (changed >= 0) {
+        active[changed] = 1;
+        const cy = Math.floor(changed / nx),
+          cx = changed % nx;
+        for (const yy of [cy, cy + 1])
+          for (const xx of [cx, cx + 1]) queue.push(yy * (nx + 1) + xx);
+      }
+    }
+    if (s.largestIsland) {
+      const visited = new Uint8Array(active.length);
+      let largest = [];
+      for (let start = 0; start < active.length; start++)
+        if (active[start] && !visited[start]) {
+          const component = [start];
+          visited[start] = 1;
+          for (let head = 0; head < component.length; head++) {
+            const k = component[head],
+              x = k % nx,
+              y = Math.floor(k / nx);
+            for (const [xx, yy] of [
+              [x - 1, y],
+              [x + 1, y],
+              [x, y - 1],
+              [x, y + 1],
+            ])
+              if (xx >= 0 && xx < nx && yy >= 0 && yy < ny) {
+                const n = yy * nx + xx;
+                if (active[n] && !visited[n]) {
+                  visited[n] = 1;
+                  component.push(n);
+                }
+              }
+          }
+          if (component.length > largest.length) largest = component;
+        }
+      active.fill(0);
+      for (const k of largest) active[k] = 1;
+    }
+  }
+  function isOn(x, y) {
+    if (y < 0 || y >= ny) return false;
+    if (periodic) x = (x + nx) % nx;
+    return x >= 0 && x < nx && active[y * nx + x];
+  }
+  function tri(a, b, c) {
+    if (a !== b && b !== c && a !== c) indices.push(a, b, c);
+  }
+  for (let y = 0; y < ny; y++)
+    for (let x = 0; x < nx; x++)
+      if (isOn(x, y)) {
+        const corners = [
+            [x, y],
+            [x + 1, y],
+            [x + 1, y + 1],
+            [x, y + 1],
+          ],
+          f = corners.map(([a, b]) => vertex(a, b, false)),
+          b = corners.map(([a, b]) => vertex(a, b, true));
+        tri(f[0], f[1], f[2]);
+        tri(f[0], f[2], f[3]);
+        tri(b[0], b[2], b[1]);
+        tri(b[0], b[3], b[2]);
+        [
+          [x, y - 1],
+          [x + 1, y],
+          [x, y + 1],
+          [x - 1, y],
+        ].forEach(([xx, yy], k) => {
+          if (!isOn(xx, yy)) {
+            const j = (k + 1) % 4;
+            tri(f[k], b[k], b[j]);
+            tri(f[k], b[j], f[j]);
+          }
+        });
+      }
+  if (!indices.length)
+    throw new Error(
+      "No silhouette remains. Increase the silhouette threshold.",
+    );
+  return {
+    positions: new Float32Array(positions),
+    indices: new Uint32Array(indices),
+    colors: new Float32Array(colors),
+  };
+}
+export function binarySTL(mesh) {
+  const { positions: p, indices: i } = mesh,
+    n = i.length / 3;
+  const out = new ArrayBuffer(84 + n * 50),
+    v = new DataView(out);
+  v.setUint32(80, n, true);
+  for (let t = 0; t < n; t++) {
+    const a = i[t * 3] * 3,
+      b = i[t * 3 + 1] * 3,
+      c = i[t * 3 + 2] * 3;
+    const ux = p[b] - p[a],
+      uy = p[b + 1] - p[a + 1],
+      uz = p[b + 2] - p[a + 2],
+      vx = p[c] - p[a],
+      vy = p[c + 1] - p[a + 1],
+      vz = p[c + 2] - p[a + 2];
+    let normal = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx],
+      len = Math.hypot(...normal) || 1;
+    const values = [
+      ...normal.map((x) => x / len),
+      p[a],
+      p[a + 1],
+      p[a + 2],
+      p[b],
+      p[b + 1],
+      p[b + 2],
+      p[c],
+      p[c + 1],
+      p[c + 2],
+    ];
+    values.forEach((x, k) => v.setFloat32(84 + t * 50 + k * 4, x, true));
+  }
+  return new Uint8Array(out);
+}
+export function meshStats(m) {
+  const lo = [Infinity, Infinity, Infinity],
+    hi = [-Infinity, -Infinity, -Infinity];
+  let volume = 0;
+  for (let j = 0; j < m.positions.length; j++) {
+    const k = j % 3;
+    lo[k] = Math.min(lo[k], m.positions[j]);
+    hi[k] = Math.max(hi[k], m.positions[j]);
+  }
+  const p = m.positions,
+    i = m.indices;
+  for (let j = 0; j < i.length; j += 3) {
+    const a = i[j] * 3,
+      b = i[j + 1] * 3,
+      c = i[j + 2] * 3;
+    volume +=
+      (p[a] * (p[b + 1] * p[c + 2] - p[b + 2] * p[c + 1]) +
+        p[a + 1] * (p[b + 2] * p[c] - p[b] * p[c + 2]) +
+        p[a + 2] * (p[b] * p[c + 1] - p[b + 1] * p[c])) /
+      6;
+  }
+  return {
+    triangles: i.length / 3,
+    dimensions: hi.map((x, k) => x - lo[k]),
+    volume: Math.abs(volume) / 1000,
+    grams: (Math.abs(volume) / 1000) * 1.24,
+  };
+}

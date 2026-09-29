@@ -1,0 +1,625 @@
+import { createIcons, icons } from "lucide";
+import { zipSync, strToU8 } from "fflate";
+import {
+  defaults,
+  shapes,
+  validate,
+  gridSize,
+  buildMesh,
+  binarySTL,
+} from "./geometry.js";
+import { threeMF } from "./three-mf.js";
+import { loadImage, sampleImage, demoImage } from "./image.js";
+import { Preview } from "./preview.js";
+import { initAdvanced } from "./advanced.js";
+import { initLibrary } from "./library.js";
+import { initMounts } from "./mounts.js";
+import { initPersistence } from "./persistence.js";
+import { makeBoxKit } from "./box-kit.js";
+import "./style.css";
+import "./advanced.css";
+
+const $ = (s) => document.querySelector(s),
+  icon = (name) => `<i data-lucide="${name}"></i>`;
+let settings = { ...defaults },
+  image,
+  imageSource,
+  filename = "Alpine light · sample",
+  revision = 0,
+  timer,
+  activeTab = "model",
+  busy = false;
+let photoLibrary, colorStudio, mountStudio;
+const composedImage = () => photoLibrary?.getImage() || image;
+const worker = new Worker(new URL("./mesh.worker.js", import.meta.url), {
+    type: "module",
+  }),
+  jobs = new Map();
+let nextJob = 0;
+worker.onmessage = ({ data }) => {
+  const job = jobs.get(data.id);
+  if (job) {
+    jobs.delete(data.id);
+    data.error ? job.reject(new Error(data.error)) : job.resolve(data);
+  }
+};
+worker.onerror = () => {
+  for (const job of jobs.values())
+    job.reject(new Error("Model worker failed. Restart the app."));
+  jobs.clear();
+};
+function generate(
+  s,
+  preview = true,
+  source = composedImage(),
+  returnMesh = false,
+) {
+  validate(s);
+  const { nx, ny } = gridSize(s, preview),
+    pixels = sampleImage(source, s, nx, ny),
+    id = ++nextJob;
+  return new Promise((resolve, reject) => {
+    jobs.set(id, { resolve, reject });
+    worker.postMessage(
+      {
+        id,
+        settings: s,
+        pixels,
+        nx,
+        ny,
+        export: returnMesh ? "mesh" : !preview,
+      },
+      [pixels.buffer],
+    );
+  });
+}
+
+$("#app").innerHTML = `
+<header><div class="brand"><span class="brand-mark">${icon("layers-3")}</span><div>make my <b>lithophane</b><small>DESKTOP STUDIO</small></div></div><div class="project-title"><span class="dot"></span><input id="project-name" aria-label="Project name" value="Untitled project"/><span class="badge">LOCAL</span></div><div class="header-actions"><button id="open-project">${icon("folder-open")} Open</button><button id="save-project">${icon("save")} Save project</button><button class="primary" id="export-top">${icon("download")} Export model</button></div></header>
+<div class="workspace"><aside class="left"><div class="section-heading"><span>YOUR PHOTO</span><span class="step">01</span></div><button class="photo-card" id="upload"><img id="photo-thumb" alt="Current source image"/><span>${icon("image-plus")} Change photo</span></button><div class="photo-caption"><span id="filename"></span><button id="reset-image" title="Reset photo adjustments">${icon("rotate-ccw")}</button></div><button class="upload-secondary" id="add-photo">${icon("upload")} Import photo</button><p class="hint">PNG, JPG or WebP · processed on your device</p><div class="section-heading spaced"><span>CHOOSE A SHAPE</span><span class="step">02</span></div><div class="shape-grid">${shapes.map(([id, label, glyph]) => `<button class="shape ${id === "flat" ? "selected" : ""}" data-shape="${id}">${icon(glyph)}<span>${label}</span></button>`).join("")}</div><div class="local-note">${icon("shield-check")}<div><b>Your memories stay yours.</b><br/>No uploads. No account. Works offline.</div></div><button id="guide" class="guide-button">${icon("book-open")} Printing & feature guide ${icon("arrow-up-right")}</button></aside>
+<main><div class="canvas-bar"><div><span class="eyebrow">WORKSPACE</span><h1 id="shape-title">Flat panel</h1></div><div class="view-modes"><button data-view="solid" class="active">${icon("box")} Solid</button><button data-view="light">${icon("sun")} Backlit</button><button data-view="wire">${icon("grid-3x3")} Mesh</button></div></div><div id="viewport"><div class="preview-label"><span class="dot"></span> LIVE 3D PREVIEW <span id="preview-quality">Draft mesh</span></div><div class="viewport-tools"><button id="reset-view" title="Fit model">${icon("maximize")}</button><button id="front-view" title="Front view">${icon("scan-face")}</button><button id="grid-toggle" title="Toggle build grid">${icon("grid-2x2")}</button><button id="screenshot" title="Save preview image">${icon("camera")}</button></div><div class="canvas-hint">${icon("mouse")} Drag to orbit <span>·</span> Scroll to zoom <span>·</span> Right-drag to pan</div><div id="busy-indicator" hidden>Generating model…</div></div><div class="model-info"><div><span>MODEL SIZE</span><strong id="model-size">—</strong></div><div><span>EST. SOLID PLA</span><strong id="model-weight">—</strong></div><div><span>PREVIEW TRIANGLES</span><strong id="model-triangles">—</strong></div><div class="quality-note">${icon("sparkles")} Full detail on export</div></div><div class="bottom-tip">${icon("lightbulb")} <span>A little light makes all the difference. Switch to <b>Backlit</b> to inspect the image.</span></div></main>
+<aside class="right"><div class="settings-tabs"><button data-tab="model" class="active">Model</button><button data-tab="image">Image</button><button data-tab="print">Print & color</button></div><div id="settings-panel"></div><div class="export-section"><div class="export-summary"><span id="export-spacing">0.35 mm detail</span><span>STL · millimeters</span></div><button class="primary export-button" id="export">${icon("download")} Export STL ${icon("arrow-right")}</button><button id="export-3mf">Export 3MF model</button><button id="export-kit">Export project kit (.zip)</button><p>Includes model, settings and printing notes.</p></div></aside></div><footer><span><span class="dot"></span> <span id="status">Ready to create</span></span><span>MAKE MY LITHOPHANE <b>v0.1</b> <span class="separator">/</span> OFFLINE STUDIO</span></footer>
+<input id="image-file" type="file" accept="image/png,image/jpeg,image/webp" hidden/><input id="project-file" type="file" accept=".litho,.json" hidden/><dialog id="guide-modal"><button id="close-guide" class="dialog-close">${icon("x")}</button><span class="eyebrow">FROM PHOTO TO PRINT</span><h2>A memory you can hold.</h2><p>Import a photo, choose a shape, adjust thickness, then export an STL in millimeters for your slicer. The preview uses a lighter mesh; exported detail follows your resolution setting.</p><h3>Starting points</h3><ul><li>White PLA, 0.12 mm layers, 100% infill, and slow outer walls are useful starting settings. Tune them for your printer.</li><li>Print flat panels upright with a brim for stability. Check supports for curved parts, hearts, and spheres in your slicer.</li><li>Test a small thickness calibration strip with your filament and light source before a full print.</li><li>Use a low-heat LED light source and leave space for ventilation.</li></ul><h3>What this version supports</h3><p>Flat and curved panels, open cylinders and tapered lamps, spheres with a bottom opening, procedural moon relief, hearts, threshold silhouettes, curved night-light panels, and light-box panels with a separate enclosure. Rotate, mirror, crop, adjust tone, add text, save projects, export STL and 1:1 color sheets.</p><h3>Limits & experimental features</h3><p>Backlit view is an illustration, not a calibrated light simulation. Moon relief is procedural, not a lunar map. Silhouettes can contain disconnected islands. Night-light panels have no hardware-specific clips. The color studio supports experimental CMYW material volumes. Filament painting is Work in progress and is paused until explicitly requested. Photo libraries support collages, panoramas, and batch panels. The hardware workshop produces separate generic rings, spoke adapters, stands and U-channel clips. Color accuracy and hardware fit require physical calibration. This is an independent app, not verified feature-for-feature parity with Lithophane Maker Desktop.</p><button id="calibration" class="primary">Export thickness calibration strip</button></dialog><div id="toast" role="status"></div>`;
+const preview = new Preview($("#viewport"));
+function refreshIcons() {
+  createIcons({ icons, attrs: { "stroke-width": 1.7 } });
+}
+function field(key, label, min, max, step = 1, unit = "mm") {
+  return `<label class="field"><span>${label}<em>${unit}</em></span><input data-setting="${key}" aria-label="${label}" type="number" min="${min}" max="${max}" step="${step}" value="${settings[key]}"/></label>`;
+}
+function range(key, label, min, max, step = 1, unit = "") {
+  return `<label class="range-field"><span>${label}<output id="value-${key}">${settings[key]}${unit}</output></span><input type="range" data-setting="${key}" aria-label="${label}" min="${min}" max="${max}" step="${step}" value="${settings[key]}"/></label>`;
+}
+function check(key, label) {
+  return `<label class="check"><input type="checkbox" data-setting="${key}" ${settings[key] ? "checked" : ""}/><span>${label}</span></label>`;
+}
+function renderSettings() {
+  const round = ["cylinder", "lamp", "sphere", "moon"].includes(settings.shape),
+    sphere = ["sphere", "moon"].includes(settings.shape);
+  let html = "";
+  if (activeTab === "model")
+    html = `<div class="panel-title">Dimensions <span>01</span></div><div class="field-row">${field("width", round ? "Inner diameter" : "Width", 20, 500)}${sphere ? "" : field("height", "Height", 20, 500)}</div><p class="hint">${round ? "Diameter is measured at the inner base." : "Width follows the surface, including the border."}</p><div class="panel-title">Thickness <span>02</span></div><div class="field-row">${field("min", "Minimum", 0.4, 9.9, 0.1)}${field("max", "Maximum", 0.5, 10, 0.1)}</div><div class="thickness-scale"><span>Light areas</span><span>Dark areas</span></div><div class="gradient-scale"></div><div class="panel-title">Detail & finish <span>03</span></div>${field("resolution", "Resolution", 0.15, 2, 0.05, "mm / sample")}<p class="hint">Smaller values capture more detail and create larger files.</p>${!round ? range("border", "Solid border", 0, 15, 0.5, " mm") : ""}${["curved", "nightlight"].includes(settings.shape) ? range("angle", "Curve angle", 10, 300, 1, "°") : ""}${settings.shape === "lamp" ? range("taper", "Top / base diameter", 0.3, 1.5, 0.05) : ""}${sphere ? field("opening", "Bottom opening diameter", 5, settings.width - 8, 1) : ""}${settings.shape === "moon" ? range("moon", "Procedural lunar texture", 0, 1, 0.05) : ""}${settings.shape === "silhouette" ? range("threshold", "Keep tones darker than", 0.05, 1, 0.01) : ""}${settings.shape === "box" ? field("boxDepth", "Enclosure depth", 15, 100, 1) : ""}<div class="note">${icon("info")}<span>${sphere ? "Sphere has a closed top and an open bottom for an LED." : settings.shape === "nightlight" ? "Curved panel only. Hardware-specific clips are not included." : settings.shape === "box" ? "Export a kit to include an open-front enclosure. Fit clearance: 0.4 mm per side." : settings.shape === "silhouette" ? "White regions are removed. Check disconnected islands in your slicer." : "Dark pixels create thicker material; light pixels let more light through."}</span></div>`;
+  if (activeTab === "model" && settings.shape === "silhouette")
+    html += check("largestIsland", "Keep only the largest connected shape");
+  if (activeTab === "image")
+    html = `<div class="panel-title">Compose your photo</div><div class="button-row"><button id="rotate-photo">${icon("rotate-cw")} Rotate 90°</button><button id="auto-tone">${icon("wand-sparkles")} Auto tone</button></div>${check("flip", "Mirror horizontally")}<label class="field"><span>Photo fit</span><select data-setting="fit"><option value="cover" ${settings.fit === "cover" ? "selected" : ""}>Fill & crop</option><option value="contain" ${settings.fit === "contain" ? "selected" : ""}>Fit whole image</option></select></label>${range("zoom", "Zoom", 1, 4, 0.05, "×")}${range("panX", "Horizontal position", -100, 100)}${range("panY", "Vertical position", -100, 100)}<div class="panel-title">Light & tone</div>${range("brightness", "Brightness", -100, 100)}${range("contrast", "Contrast", -90, 100)}${range("gamma", "Gamma", 0.2, 3, 0.05)}${check("invert", "Invert light and dark")}<div class="panel-title">Personalize</div><label class="field"><span>Caption</span><input data-setting="text" maxlength="80" value="" placeholder="Add a name, date or memory"/></label>${range("textSize", "Text size", 3, 30, 1, " mm")}`;
+  if (activeTab === "print")
+    html = `<div class="panel-title">Output style</div><label class="field"><span>Mode</span><select data-setting="colorMode"><option value="mono" ${settings.colorMode === "mono" ? "selected" : ""}>White filament lithophane</option><option value="paper" ${settings.colorMode === "paper" ? "selected" : ""}>Color paper backing</option><option value="painting" disabled>Filament painting · Work in progress</option></select></label><p class="hint">Color paper backing pairs a white lithophane with a printed color sheet. Filament painting is paused for this version.</p>${settings.colorMode === "painting" ? `${field("levels", "Grayscale bands", 2, 12, 1, "bands")}${field("layer", "Layer height", 0.04, 0.3, 0.01)}<p class="hint">Kit includes suggested swap heights. Print painting panels flat, image side up; validate heights in your slicer.</p>` : ""}<button id="color-sheet" class="wide">${icon("printer")} Export 1:1 color sheet (SVG)</button><p class="hint">For flat panels. Print at 100% scale. Disable page fitting.</p><div class="panel-title">Filament presets</div><div class="preset-list"><button data-preset="standard"><b>White PLA</b><span>0.8 – 3.2 mm</span></button><button data-preset="thin"><b>Bright LED / thin panel</b><span>0.6 – 2.4 mm</span></button><button data-preset="thick"><b>High contrast</b><span>0.8 – 4.0 mm</span></button></div><div class="note">${icon("info")}<span>Thickness depends on filament opacity and your light source. These are starting points, not calibrated profiles.</span></div><button id="calibration-panel" class="wide">Export calibration strip</button>`;
+  if (activeTab === "image")
+    html += `<div class="panel-title">Color adjustments</div>${range("hue", "Hue shift", -180, 180, 1, "°")}${range("saturation", "Saturation", -100, 100, 1)}`;
+  if (activeTab === "model" && settings.shape === "lamp")
+    html += `<div class="panel-title">Wavy shade</div>${field("waves", "Waves around perimeter", 0, 24, 1, "waves")}${field("waveDepth", "Wave depth", 0, 5, 0.1)}`;
+  if (
+    activeTab === "model" &&
+    ["flat", "curved", "box", "nightlight"].includes(settings.shape)
+  )
+    html += `<div class="panel-title">Hanging holes</div>${check("holes", "Two holes in the top border")}${field("holeDiameter", "Hole diameter", 1, 10, 0.1)}<p class="hint">Set the border at least 2 mm wider than the holes. Preview resolution may simplify small openings.</p>`;
+  if (activeTab === "print")
+    html += `<div class="panel-title">Advanced color workflows</div><button id="launch-color" class="wide">Open color lithophane studio</button><p class="hint">CMYW material volumes and 3MF assemblies. Filament painting: Work in progress.</p>`;
+  $("#settings-panel").innerHTML = html;
+  if (activeTab === "image") $('[data-setting="text"]').value = settings.text;
+  refreshIcons();
+}
+function toast(message, error = false) {
+  const t = $("#toast");
+  t.textContent = message;
+  t.classList.toggle("error", error);
+  t.classList.add("visible");
+  clearTimeout(t.hide);
+  t.hide = setTimeout(() => t.classList.remove("visible"), 5500);
+}
+function status(message) {
+  $("#status").textContent = message;
+}
+function schedule(reset = false) {
+  const current = ++revision;
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    try {
+      status("Updating preview…");
+      const result = await generate({ ...settings });
+      if (current !== revision) return;
+      preview.update(result.mesh, reset);
+      const st = result.stats;
+      $("#model-size").textContent =
+        st.dimensions.map((x) => x.toFixed(1)).join(" × ") + " mm";
+      $("#model-weight").textContent = "≈ " + st.grams.toFixed(1) + " g";
+      $("#model-triangles").textContent = st.triangles.toLocaleString();
+      $("#export-spacing").textContent = settings.resolution + " mm detail";
+      status("Preview ready · all processing local");
+    } catch (e) {
+      if (current === revision) {
+        status("Settings need attention");
+        toast(e.message, true);
+      }
+    }
+  }, 180);
+}
+async function saveFile(name, bytes) {
+  if (window.desktop) return window.desktop.saveFile(name, bytes);
+  const blob = new Blob([bytes]),
+    url = URL.createObjectURL(blob),
+    a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return true;
+}
+function projectName() {
+  return ($("#project-name").value.trim() || "Untitled project").replace(
+    /[<>:"/\\|?*\x00-\x1f]/g,
+    "_",
+  );
+}
+function projectData() {
+  return JSON.stringify(
+    {
+      format: "make-my-lithophane",
+      version: 1,
+      name: $("#project-name").value,
+      filename,
+      settings,
+      image: imageSource,
+      library: photoLibrary?.getState(),
+      colorStudio: colorStudio?.getState(),
+      mountStudio: mountStudio?.getState(),
+    },
+    null,
+    2,
+  );
+}
+async function withBusy(action) {
+  if (busy) return;
+  busy = true;
+  $("header").inert = true;
+  $(".workspace").inert = true;
+  $("#busy-indicator").hidden = false;
+  document
+    .querySelectorAll(".export-button,#export-top,#export-kit")
+    .forEach((b) => (b.disabled = true));
+  try {
+    await action();
+  } catch (e) {
+    toast(e.message, true);
+    status("Action failed");
+  } finally {
+    busy = false;
+    $("header").inert = false;
+    $(".workspace").inert = false;
+    $("#busy-indicator").hidden = true;
+    document
+      .querySelectorAll(".export-button,#export-top,#export-kit")
+      .forEach((b) => (b.disabled = false));
+  }
+}
+function notes(s, stats) {
+  return `MAKE MY LITHOPHANE\nDimensions: millimeters. STL has no embedded units.\nShape: ${s.shape}\nResolution: ${s.resolution} mm\nWall thickness: ${s.min}–${s.max} mm\nMesh triangles: ${stats.triangles}\nApproximate solid PLA mass: ${stats.grams.toFixed(1)} g (1.24 g/cm³)\n\nInspect orientation, dimensions, supports and disconnected pieces in your slicer. White PLA, 0.12 mm layers and 100% infill are starting points, not printer-specific validated settings. Upright panels usually need a brim. Spheres and curved shapes may need supports. Use low-heat LEDs.\n\n${s.colorMode === "painting" ? `Experimental grayscale painting: print flat with image facing up. Layer height ${s.layer} mm. Suggested band heights (round to your slicer layers): ${Array.from({ length: s.levels }, (_, i) => (Math.round((s.min + (i * (s.max - s.min)) / (s.levels - 1)) / s.layer) * s.layer).toFixed(2)).join(", ")} mm. Assign dark-to-light grayscale filaments from lowest to highest band. This is not calibrated color matching.\n` : ""}\nBacklit preview is illustrative. Moon relief is procedural. No hardware-specific mounts.\n`;
+}
+async function exportModel(kit = false) {
+  await withBusy(async () => {
+    status("Generating full-resolution STL…");
+    const s = { ...settings },
+      result = await generate(s, false);
+    if (!kit) {
+      if (await saveFile(projectName() + ".stl", result.bytes))
+        toast("STL saved. Open it in your slicer to prepare the print.");
+    } else {
+      const files = {
+        "lithophane.stl": result.bytes,
+        "project.litho": strToU8(projectData()),
+        "PRINTING.txt": strToU8(notes(s, result.stats)),
+      };
+      if (s.colorMode === "paper" && ["flat", "box"].includes(s.shape))
+        files["color-backing.svg"] = strToU8(colorSheet());
+      if (s.shape === "box") files["enclosure.stl"] = await enclosureSTL(s);
+      if (
+        await saveFile(projectName() + "-kit.zip", zipSync(files, { level: 3 }))
+      )
+        toast("Project kit saved.");
+    }
+    status("Export complete");
+  });
+}
+function colorSheet() {
+  if (!["flat", "box"].includes(settings.shape))
+    throw new Error(
+      "Color paper sheets currently support flat panels and light boxes.",
+    );
+  const canvas = sampleImage(
+    composedImage(),
+    settings,
+    Math.round((settings.width / 25.4) * 300),
+    Math.round((settings.height / 25.4) * 300),
+    true,
+  );
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${settings.width}mm" height="${settings.height}mm" viewBox="0 0 ${settings.width} ${settings.height}"><image width="${settings.width}" height="${settings.height}" href="${canvas.toDataURL("image/png")}" preserveAspectRatio="none"/></svg>`;
+}
+async function calibration() {
+  await withBusy(async () => {
+    const { buildMesh, binarySTL } = await import("./geometry.js");
+    const s = { ...defaults, width: 100, height: 25, border: 0 },
+      nx = 100,
+      ny = 25,
+      pixels = new Float32Array((nx + 1) * (ny + 1));
+    for (let y = 0; y <= ny; y++)
+      for (let x = 0; x <= nx; x++)
+        pixels[y * (nx + 1) + x] = 1 - Math.min(9, Math.floor(x / 10)) / 9;
+    const bytes = binarySTL(buildMesh(s, pixels, nx, ny));
+    if (await saveFile("calibration-0.8-to-3.2mm.stl", bytes))
+      toast("10 steps from 0.8 mm to 3.2 mm, left to right.");
+  });
+}
+async function enclosureSTL(s) {
+  // One closed, connected shell: height field with a deep border and thin back.
+  const { buildMesh, binarySTL } = await import("./geometry.js");
+  const box = {
+    ...defaults,
+    shape: "flat",
+    width: s.width + 4.8,
+    height: s.height + 4.8,
+    min: 2,
+    max: s.boxDepth,
+    border: 2,
+  };
+  // Geometry validator caps photo thickness at 10 mm; construct shell from valid mesh then extend its rim.
+  const meshSettings = { ...box, max: 10 };
+  const nx = Math.ceil(box.width / 0.4),
+    ny = Math.ceil(box.height / 0.4),
+    pixels = new Float32Array((nx + 1) * (ny + 1)).fill(1);
+  const mesh = buildMesh(meshSettings, pixels, nx, ny);
+  for (let i = 2; i < mesh.positions.length; i += 3)
+    if (mesh.positions[i] > 9) mesh.positions[i] = s.boxDepth;
+  return binarySTL(mesh);
+}
+async function setPhoto(src, name) {
+  const loaded = await loadImage(src);
+  image = loaded;
+  imageSource = src;
+  filename = name;
+  $("#photo-thumb").src = src;
+  $("#filename").textContent = name;
+  $("#filename").title = name;
+  schedule(true);
+}
+async function importPhoto(file) {
+  if (!file) return;
+  if (file.size > 40 * 1024 * 1024)
+    throw new Error("Choose a photo smaller than 40 MB.");
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
+    throw new Error("Choose a PNG, JPEG, or WebP image.");
+  const src = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error("Could not read photo."));
+    r.readAsDataURL(file);
+  });
+  photoLibrary?.resetLayout();
+  await setPhoto(src, file.name);
+  toast("Photo loaded locally.");
+}
+document.addEventListener("input", (event) => {
+  const el = event.target,
+    k = el.dataset.setting;
+  if (!k) return;
+  settings[k] =
+    el.type === "checkbox"
+      ? el.checked
+      : typeof defaults[k] === "number"
+        ? Number(el.value)
+        : el.value;
+  const out = $("#value-" + k);
+  if (out) out.textContent = el.value;
+  schedule();
+});
+document.addEventListener("change", (event) => {
+  if (event.target.dataset.setting === "colorMode") renderSettings();
+});
+document.addEventListener("click", async (event) => {
+  const b = event.target.closest("button");
+  if (!b) return;
+  try {
+    if (b.dataset.shape) {
+      settings.shape = b.dataset.shape;
+      document
+        .querySelectorAll(".shape")
+        .forEach((x) => x.classList.toggle("selected", x === b));
+      $("#shape-title").textContent = shapes.find(
+        (x) => x[0] === settings.shape,
+      )[1];
+      renderSettings();
+      schedule(true);
+    }
+    if (b.dataset.tab) {
+      activeTab = b.dataset.tab;
+      document
+        .querySelectorAll("[data-tab]")
+        .forEach((x) => x.classList.toggle("active", x === b));
+      renderSettings();
+    }
+    if (b.dataset.view) {
+      preview.setMode(b.dataset.view);
+      document
+        .querySelectorAll("[data-view]")
+        .forEach((x) => x.classList.toggle("active", x === b));
+    }
+    if (b.dataset.preset) {
+      const values = {
+        standard: [0.8, 3.2],
+        thin: [0.6, 2.4],
+        thick: [0.8, 4],
+      }[b.dataset.preset];
+      [settings.min, settings.max] = values;
+      renderSettings();
+      schedule();
+      toast("Filament thickness preset applied.");
+    }
+    switch (b.id) {
+      case "export-3mf":
+        await withBusy(async () => {
+          const result = await generate(
+            { ...settings },
+            false,
+            composedImage(),
+            true,
+          );
+          if (
+            await saveFile(
+              projectName() + ".3mf",
+              threeMF(
+                [{ name: "Lithophane", color: "#F1E8D5", mesh: result.mesh }],
+                projectName(),
+              ),
+            )
+          )
+            toast("3MF model saved in millimeters.");
+        });
+        break;
+      case "launch-color":
+        $("#color-studio-open").click();
+        break;
+      case "upload":
+      case "add-photo":
+        $("#image-file").click();
+        break;
+      case "export":
+      case "export-top":
+        await exportModel();
+        break;
+      case "export-kit":
+        await exportModel(true);
+        break;
+      case "save-project":
+        if (await saveFile(projectName() + ".litho", strToU8(projectData())))
+          toast("Project saved with its photo and settings.");
+        break;
+      case "open-project":
+        $("#project-file").click();
+        break;
+      case "rotate-photo":
+        settings.rotation = (settings.rotation + 90) % 360;
+        schedule();
+        break;
+      case "reset-image":
+        for (const k of [
+          "brightness",
+          "contrast",
+          "gamma",
+          "invert",
+          "flip",
+          "rotation",
+          "zoom",
+          "panX",
+          "panY",
+          "fit",
+          "text",
+          "hue",
+          "saturation",
+        ])
+          settings[k] = defaults[k];
+        renderSettings();
+        schedule();
+        break;
+      case "auto-tone": {
+        const p = sampleImage(
+          image,
+          { ...settings, brightness: 0, contrast: 0, gamma: 1, invert: false },
+          100,
+          100,
+        );
+        const avg = p.reduce((a, x) => a + x, 0) / p.length;
+        settings.brightness = Math.round((0.5 - avg) * 100);
+        settings.contrast = 15;
+        renderSettings();
+        schedule();
+        break;
+      }
+      case "reset-view":
+        preview.reset();
+        break;
+      case "front-view":
+        preview.front();
+        break;
+      case "grid-toggle":
+        preview.grid.visible = !preview.grid.visible;
+        break;
+      case "screenshot": {
+        const blob = await new Promise((r) =>
+          preview.renderer.domElement.toBlob(r),
+        );
+        if (blob)
+          await saveFile(
+            projectName() + "-preview.png",
+            new Uint8Array(await blob.arrayBuffer()),
+          );
+        break;
+      }
+      case "color-sheet":
+        if (await saveFile(projectName() + "-color.svg", strToU8(colorSheet())))
+          toast("Color sheet saved at 1:1 scale.");
+        break;
+      case "guide":
+        $("#guide-modal").showModal();
+        break;
+      case "close-guide":
+        $("#guide-modal").close();
+        break;
+      case "calibration":
+      case "calibration-panel":
+        await calibration();
+        break;
+    }
+  } catch (e) {
+    toast(e.message, true);
+  }
+});
+$("#image-file").onchange = async (e) => {
+  try {
+    await importPhoto(e.target.files[0]);
+  } catch (err) {
+    toast(err.message, true);
+  }
+  e.target.value = "";
+};
+async function restoreProject(p) {
+  if (
+    p.format !== "make-my-lithophane" ||
+    p.version !== 1 ||
+    typeof p.image !== "string" ||
+    !/^data:image\/(png|jpeg|webp);base64,/.test(p.image)
+  )
+    throw new Error("This is not a supported .litho project.");
+  const next = { ...defaults };
+  for (const k in defaults)
+    if (k in p.settings) {
+      if (typeof p.settings[k] !== typeof defaults[k])
+        throw new Error("Invalid project settings.");
+      next[k] = p.settings[k];
+    }
+  if (next.colorMode === "painting") next.colorMode = "mono";
+  validate(next);
+  await photoLibrary.setState(p.library);
+  colorStudio.setState(p.colorStudio);
+  mountStudio.setState(p.mountStudio);
+  const decoded = await loadImage(p.image);
+  settings = next;
+  image = decoded;
+  await setPhoto(p.image, String(p.filename || "Project photo"));
+  $("#project-name").value = String(p.name || "Untitled project");
+  document
+    .querySelectorAll(".shape")
+    .forEach((b) =>
+      b.classList.toggle("selected", b.dataset.shape === settings.shape),
+    );
+  $("#shape-title").textContent = shapes.find(
+    (x) => x[0] === settings.shape,
+  )[1];
+  renderSettings();
+  toast("Project restored.");
+}
+$("#project-file").onchange = async (e) => {
+  try {
+    const f = e.target.files[0];
+    if (!f) return;
+    if (f.size > 120 * 1024 * 1024) throw new Error("Project exceeds 120 MB.");
+    await restoreProject(JSON.parse(await f.text()));
+  } catch (err) {
+    toast(err.message, true);
+  }
+  e.target.value = "";
+};
+document.addEventListener("dragover", (e) => e.preventDefault());
+document.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  try {
+    await importPhoto(e.dataTransfer.files[0]);
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+    e.preventDefault();
+    $("#save-project").click();
+  }
+});
+photoLibrary = initLibrary({
+  getSettings: () => settings,
+  currentImage: () => image,
+  currentSource: () => imageSource,
+  currentName: () => filename,
+  setPhoto,
+  changed: () => schedule(true),
+  toast,
+  box: async (photos) =>
+    withBusy(async () => {
+      const bytes = await makeBoxKit(photos, { ...settings }, generate, status);
+      if (await saveFile(projectName() + "-four-sided-box.zip", bytes))
+        toast("Four-sided light box kit saved.");
+      status("Box kit complete");
+    }),
+  batch: async (photos) =>
+    withBusy(async () => {
+      const s = { ...settings, shape: "flat" },
+        files = {};
+      let total = 0;
+      for (let i = 0; i < photos.length; i++) {
+        status(`Generating panel ${i + 1} of ${photos.length}…`);
+        const result = await generate(s, false, photos[i].image);
+        total += result.bytes.length;
+        if (total > 300 * 1024 * 1024)
+          throw new Error(
+            "Batch exceeds 300 MB. Use fewer photos or increase spacing.",
+          );
+        files[`panel-${i + 1}.stl`] = result.bytes;
+      }
+      files["project.litho"] = strToU8(projectData());
+      if (
+        await saveFile(
+          projectName() + "-panels.zip",
+          zipSync(files, { level: 3 }),
+        )
+      )
+        toast("Individual photo panels exported.");
+      status("Batch export complete");
+    }),
+});
+colorStudio = initAdvanced({
+  getSettings: () => settings,
+  getImage: composedImage,
+  getName: projectName,
+  getProject: projectData,
+  saveFile,
+  toast,
+});
+mountStudio = initMounts({
+  getSettings: () => settings,
+  preview: (mesh) => preview.update(mesh, true),
+  restore: () => schedule(true),
+  saveFile,
+  toast,
+});
+renderSettings();
+refreshIcons();
+await setPhoto(demoImage(), filename);
+initPersistence({ serialize: projectData, restore: restoreProject, toast });

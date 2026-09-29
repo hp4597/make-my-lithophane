@@ -1,0 +1,54 @@
+{
+  "name": "make-my-lithophane",
+  "version": "0.1.0",
+  "description": "Local photo-to-lithophane studio for Windows",
+  "author": "Make My Lithophane",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "start": "npm run build && electron .",
+    "test": "node --test tests/*.test.js",
+    "test:desktop": "npm run build && node tests/desktop.cjs",
+    "package": "npm run build && electron-builder --win nsis portable",
+    "package:dir": "npm run build && electron-builder --win --dir"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "lucide": "^0.468.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.0.12",
+    "prettier": "^3.9.9",
+    "vite": "^7.1.7"
+  },
+  "build": {
+    "appId": "studio.makemylithophane.desktop",
+    "productName": "Make My Lithophane",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis", "portable"],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "${productName} ${version} Portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}
