@@ -2,7 +2,7 @@
 
 A local Windows desktop studio for turning photos into printable lithophanes. Photos remain on the device; no account or service is required.
 
-Version **0.6.1** adds live lighting enclosures for flat panels, curved panels, cylinders, lamp shades, night lights and lightboxes, plus CMYW material export for those six shapes. The batch CLI remains available. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
+Version **0.7.0** adds experimental smooth solid CMYW panels and calibration tiles. The studio also includes live lighting enclosures for flat panels, curved panels, cylinders, lamp shades, night lights and lightboxes, plus CMYW material export for those six shapes. The batch CLI remains available. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
 
 ## Run and build
 
@@ -17,8 +17,8 @@ npm start
 
 Double-click **`build-distribution.bat`**. It installs locked dependencies, runs geometry/export tests, and builds both executables in `release/`:
 
-- **`Make My Lithophane 0.6.1 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
-- **`Make My Lithophane Setup 0.6.1.exe`** — Windows installer with installation-folder selection and desktop shortcut.
+- **`Make My Lithophane 0.7.0 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
+- **`Make My Lithophane Setup 0.7.0.exe`** — Windows installer with installation-folder selection and desktop shortcut.
 - **`win-unpacked/Make My Lithophane.exe`** — unpacked app; keep all files in that folder together.
 
 For a terminal or CI run without a final keypress: `build-distribution.bat --no-pause`. Internet is needed for build dependencies, but the resulting app works offline. The script respects an existing `NODE_EXTRA_CA_CERTS`; otherwise it exports Windows' public trusted certificates into a temporary PEM for Node, without disabling TLS verification or changing machine settings.
@@ -128,3 +128,17 @@ Automated checks cover closed meshes, winding, separated layouts, live settings 
 ### Native CMYW export fix (0.6.1)
 
 CMYW exports now accept up to 4,000,000 cells, preserving the image grid. The 1672 × 941 image dimensions from the reported failure fit this budget. STL entries are compressed incrementally; material layouts share original mesh buffers and apply placement during 3MF serialization. Target/predicted PNGs and project data are included by the export worker, eliminating a full unzip/repack in the UI. Direct 3MF export skips STL/PNG generation. This reduces temporary memory; large meshes still require substantial RAM and slicer capacity, and the budget remains explicit rather than silently downsampling.
+
+## Smooth solid color panels — experimental (0.7.0)
+
+Select **Color & print → CMYW → Smooth solid panel**. First milestone supports flat panels and lightboxes. Existing relief mode remains available; filament painting stays paused. Start with **Set small test panel (40 × 30 mm)** and **Export 36 mm color calibration tile**.
+
+The default panel is 2.4 mm thick, with 0.16 mm white front/rear skins, 0.08 mm color layers and 0.4 mm minimum color features. Internal CMYW thicknesses sum exactly to the remaining thickness. The solver enumerates integer-layer combinations and selects a nearby predicted color in a square-root linear-RGB metric. A full-resolution photo is averaged into explicit printable color cells; the original source remains in the saved project. This feature grid is intentional, separate from native relief geometry resolution. Preview and export show the same predicted cell colors. Exterior surfaces remain flat. Identical neighboring columns merge into closed row prisms; touching same-material prisms are left for the slicer to union. There are no intended positive-volume overlaps or gaps.
+
+**Optical limits:** the default absorption matrix is an uncalibrated estimate, not measured Bambu PLA data. It assumes independent per-channel exponential absorption, normalized to an all-white panel of the same thickness. It omits scattering, lateral light bleed, print texture and absolute LED brightness. Some target colors/brightnesses are unattainable at a fixed thickness; the exported report includes approximation error. Advanced profile JSON has four RGB absorption triplets per mm in C/M/Y/W order. Values must be 0–30. Copy a measured profile into the sidebar; automatic camera-based fitting is not implemented.
+
+Calibration ZIP: a 36-patch, 36 × 36 mm multipart tile; six separate all-white thickness coupons; JSON/CSV patch counts; `patch-map.svg` with labeled row/column positions; profile/settings and printing instructions. Compare under the intended light with fixed exposure/white balance. The calibration tile deliberately tests known material amounts and does not itself calibrate the profile. A physical calibration print is still required.
+
+CMYW 3MF files now contain Bambu-specific **part names and 1/2/3/4 extruder hints**, with support parts assigned to White. Import/re-export through the installed Bambu Studio preserves those names and hints. Third-party import paths can ignore global process/palette hints. Explicitly configure four filaments, verify their assignments, set 100% infill, use the exported layer height and first-layer height, then inspect the layer preview. The calibration defaults require 0.08 mm layers and a 0.16 mm first layer. These files are models, not ready-to-run G-code or physically validated printer profiles. Exports use standard model import with part metadata; a complete printer profile is not included.
+
+Limits: 64 total layers, at least one layer per skin and three internal layers, 250,000 color cells. Thicknesses must be exact layer multiples. CLI color export remains unavailable; use the desktop CMYW workflow. Run `npm run test:solid` for the live mode/calibration regression.

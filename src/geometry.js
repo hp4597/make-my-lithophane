@@ -1,7 +1,9 @@
+import { solidDefaults, solidConfig } from "./solid-settings.js";
 export const COLOR_EXPORT_CELL_LIMIT = 4000000;
 import { lightingDefaults, validateLighting } from "./lighting-settings.js";
 export const defaults = {
   ...lightingDefaults,
+  ...solidDefaults,
   shape: "flat",
   support: "auto",
   fitClearance: 0.2,
@@ -58,6 +60,9 @@ export const shapes = [
 ];
 export function validate(s) {
   validateLighting(s);
+  if (!["relief", "solid"].includes(s.colorStructure))
+    throw new Error("Unknown color structure.");
+  if (s.colorMode === "cmyw" && s.colorStructure === "solid") solidConfig(s);
   for (const k of Object.keys(defaults))
     if (typeof defaults[k] === "number" && !Number.isFinite(s[k]))
       throw new Error(`${k} must be a number.`);

@@ -37,7 +37,13 @@ export function initAdvanced(api) {
       j.reject(new Error("Color generation failed."));
     jobs.clear();
   };
-  async function process(settings, source, preview, format = "kit") {
+  async function process(
+    settings,
+    source,
+    preview,
+    format = "kit",
+    calibration = false,
+  ) {
     const { nx, ny } = gridSize(
       preview ? { ...settings, resolutionMode: "image" } : settings,
       false,
@@ -59,6 +65,7 @@ export function initAdvanced(api) {
         {
           id,
           format,
+          calibration,
           targetPNG,
           project: preview ? null : api.getProject(),
           settings,
@@ -99,6 +106,22 @@ export function initAdvanced(api) {
         pendingPreview = { s, source, resolve, reject };
         pumpPreview();
       }),
+    calibration: async () => {
+      const s = {
+        ...api.getSettings(),
+        shape: "flat",
+        width: 36,
+        height: 36,
+        colorMode: "cmyw",
+        colorStructure: "solid",
+        support: "none",
+        lightingSetup: "none",
+        resolutionMode: "spacing",
+        resolution: 2,
+      };
+      const result = await process(s, api.getImage(), false, "kit", true);
+      await api.saveFile("solid-color-calibration.zip", result.bytes);
+    },
     export: async (format = "kit") => {
       const s = { ...api.getSettings() };
       if (
