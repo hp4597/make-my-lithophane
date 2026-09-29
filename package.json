@@ -1,6 +1,6 @@
 {
   "name": "make-my-lithophane",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local photo-to-lithophane studio for Windows",
   "author": "Make My Lithophane",
   "private": true,
@@ -13,7 +13,9 @@
     "test": "node --test tests/*.test.js",
     "test:desktop": "npm run build && node tests/desktop.cjs",
     "package": "npm run build && electron-builder --win nsis portable",
-    "package:dir": "npm run build && electron-builder --win --dir"
+    "package:dir": "npm run build && electron-builder --win --dir",
+    "cli": "node cli/launch.cjs",
+    "test:cli": "npm run build && node tests/cli-desktop.cjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",
@@ -36,10 +38,15 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "package.json"
+      "package.json",
+      "cli/**/*",
+      "src/geometry.js"
     ],
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "signAndEditExecutable": false
     },
     "portable": {
@@ -49,6 +56,12 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
-    }
+    },
+    "extraFiles": [
+      {
+        "from": "scripts/lithophane-cli.cmd",
+        "to": "lithophane-cli.cmd"
+      }
+    ]
   }
 }

@@ -15,6 +15,8 @@ Reviewed September 29, 2026. Website tools are supporting references, not proof 
 
 ## Implemented and covered by automated checks
 
+- Version 0.2.0 CLI: recursive photo batches, settings profiles, monochrome STL/3MF, dry run, no-clobber output, JSON reporting and exit codes. Desktop and CLI share image sampling and geometry.
+
 - Ten shape families; image-to-thickness geometry, full-wrap seams and sphere pole closure.
 - Photo import, tonal controls, composition, captions, sizing, resolution, borders.
 - STL encoding, 3MF packaging and assembly/material resources.
