@@ -13,6 +13,12 @@ The product goal is broad functional parity with Lithophane Maker Desktop, with 
 
 Reviewed September 29, 2026. Website tools are supporting references, not proof that all desktop controls are identical.
 
+## Priority lighting scope (0.6)
+
+Flat panel, curved panel, cylinder, lamp shade, night light and lightbox now share live lighting controls and mono/CMYW export. The supplied reference families are represented by no enclosure, modular 2/3/4-board frames, fixed-board frame, LED-strip enclosure and custom measured attachments. Housing, retainers and diffusers are separate printable solids. Curved shapes require strips; round shapes provide strip cores, puck recesses and socket collars. Rigid-board frames apply to flat/box shapes. See README for dimensions and primary Bambu sources.
+
+Not claimed: exact proprietary frame replicas, verified commercial snap fits, every setting of the online maker, certified lamp/socket hardware, physical or thermal testing. Modular frame margins and fixed-board thickness/projection remain editable design assumptions. Full desktop parity is still unverified.
+
 ## Implemented and covered by automated checks
 
 - Version 0.2.0 CLI: recursive photo batches, settings profiles, monochrome STL/3MF, dry run, no-clobber output, JSON reporting and exit codes. Desktop and CLI share image sampling and geometry.

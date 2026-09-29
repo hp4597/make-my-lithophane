@@ -86,28 +86,41 @@ self.onmessage = ({ data: d }) => {
         );
         return;
       }
-      if (!["flat", "box"].includes(s.shape))
+      if (
+        !["flat", "box", "curved", "nightlight", "cylinder", "lamp"].includes(
+          s.shape,
+        )
+      )
         throw new Error(
-          "CMYW material export currently supports flat panels and light boxes. The current shape is preview-only in CMYW mode.",
+          "CMYW material export supports the six priority shapes.",
         );
       const fitted = {
         ...s,
-        shape: s.shape === "box" ? "box" : "flat",
-        max: bounds(mergeMeshes(parts.map((p) => p.mesh))).max[2],
+        shape: s.shape,
+        max: parts.heights.reduce((a, b) => Math.max(a, b), 0),
       };
       const layout = printParts(mergeMeshes(parts.map((p) => p.mesh)), fitted);
       if (layout.length > 1) {
-        files["matching-support.stl"] = binarySTL(layout[1].mesh);
+        if (s.lightingSetup === "none")
+          files["matching-support.stl"] = binarySTL(layout[1].mesh);
+        for (const p of layout.slice(1))
+          files[p.name.toLowerCase().replaceAll(" ", "-") + ".stl"] = binarySTL(
+            p.mesh,
+          );
         files["SUPPORT.txt"] = strToU8(supportNotes(fitted));
       }
       // Material layers stay aligned; matching supports and optional hardware sit beside them.
-      const pb = bounds(parts[0].mesh),
-        shift = [-pb.min[0], -pb.min[1], 0];
+      const pb = bounds(mergeMeshes(parts.map((p) => p.mesh))),
+        shift = layout.length > 1 ? pb.min.map((v) => -v) : [0, 0, 0];
       const combined = parts.map((p) => ({
         ...p,
-        mesh: transform(p.mesh, (x, y, z) => [x + shift[0], y + shift[1], z]),
+        mesh: transform(p.mesh, (x, y, z) => [
+          x + shift[0],
+          y + shift[1],
+          z + shift[2],
+        ]),
       }));
-      if (layout.length > 1) combined.push(layout[1]);
+      if (layout.length > 1) combined.push(...layout.slice(1));
       if (d.hardware) {
         const b = bounds(d.hardware),
           right = Math.max(...combined.map((p) => bounds(p.mesh).max[0]));
@@ -128,7 +141,7 @@ self.onmessage = ({ data: d }) => {
         files[part.name.toLowerCase() + ".stl"] = binarySTL(part.mesh);
       files["color-assembly.3mf"] = threeMF(parts, "CMYW lithophane");
       files["PRINTING.txt"] = strToU8(
-        `CMYW COLOR LITHOPHANE\nFour touching, non-overlapping volumes in millimeters. Open the 3MF as one multipart object, preserve part alignment and assign Cyan/Magenta/Yellow/White to corresponding extruders. Colors in the 3MF are descriptive; extruder assignment depends on your slicer.\nLayer height: ${s.layer} mm. Color thickness cap: ${s.colorDepth} mm plus one minimum layer. Print flat.\nThis uses an experimental optical-density separation, not a calibrated commercial palette. Every channel has a one-layer floor for closed geometry; this may tint whites. Print a small test and adjust material/color depth. The image belongs on the light-source side; view through the white layer.\n`,
+        `CMYW COLOR LITHOPHANE\nFour touching, non-overlapping volumes in millimeters. Open the 3MF as one multipart object, preserve part alignment and assign Cyan/Magenta/Yellow/White to corresponding extruders. Colors in the 3MF are descriptive; extruder assignment depends on your slicer.\nLayer height: ${s.layer} mm. Color thickness cap: ${s.colorDepth} mm plus one minimum layer. Orient the assembled material volumes together for your shape; curved and round models may need supports.\nThis uses an experimental optical-density separation, not a calibrated commercial palette. Every channel has a one-layer floor for closed geometry; this may tint whites. Print a small test and adjust material/color depth. The image belongs on the light-source side; view through the white layer.\n`,
       );
       files["settings.json"] = strToU8(JSON.stringify(s, null, 2));
       const bytes = zipSync(files, { level: 3 });

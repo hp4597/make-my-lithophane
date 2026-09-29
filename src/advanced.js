@@ -91,9 +91,13 @@ export function initAdvanced(api) {
       }),
     export: async (format = "kit") => {
       const s = { ...api.getSettings() };
-      if (!["flat", "box"].includes(s.shape))
+      if (
+        !["flat", "box", "curved", "nightlight", "cylinder", "lamp"].includes(
+          s.shape,
+        )
+      )
         throw new Error(
-          "CMYW export supports flat panels and light boxes. Select one of those shapes to export.",
+          "CMYW export supports flat, curved, cylinder, lamp shade, night light and lightbox.",
         );
       const result = await process(s, api.getImage(), false),
         files = unzipSync(result.bytes);

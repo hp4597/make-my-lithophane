@@ -1,4 +1,6 @@
+import { lightingDefaults, validateLighting } from "./lighting-settings.js";
 export const defaults = {
+  ...lightingDefaults,
   shape: "flat",
   support: "auto",
   fitClearance: 0.2,
@@ -46,14 +48,15 @@ export const shapes = [
   ["curved", "Curved panel", "shell"],
   ["cylinder", "Cylinder", "cylinder"],
   ["lamp", "Lamp shade", "lamp"],
+  ["nightlight", "Night light", "lightbulb"],
+  ["box", "Light box", "box"],
   ["sphere", "Sphere", "globe"],
   ["moon", "Moon lamp", "moon"],
   ["heart", "Heart", "heart"],
   ["silhouette", "Silhouette", "scan"],
-  ["nightlight", "Night light", "lightbulb"],
-  ["box", "Light box", "box"],
 ];
 export function validate(s) {
+  validateLighting(s);
   for (const k of Object.keys(defaults))
     if (typeof defaults[k] === "number" && !Number.isFinite(s[k]))
       throw new Error(`${k} must be a number.`);
@@ -68,9 +71,14 @@ export function validate(s) {
     s.printGap > 50
   )
     throw new Error("Invalid support clearance, wall or print spacing.");
-  if (s.support === "case" && !["flat", "box"].includes(s.shape))
+  if (
+    s.lightingSetup === "none" &&
+    s.support === "case" &&
+    !["flat", "box"].includes(s.shape)
+  )
     throw new Error("A fitted case requires a flat panel.");
   if (
+    s.lightingSetup === "none" &&
     s.support === "stand" &&
     !["flat", "box", "curved", "nightlight"].includes(s.shape)
   )

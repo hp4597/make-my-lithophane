@@ -131,8 +131,27 @@ function run(args) {
   result = await run([input, "--output", output, "--width", "bad", "--json"]);
   assert.equal(result.code, 2);
   assert.ok(JSON.parse(result.stdout).error);
+  result = await run([
+    path.join(input, "first.png"),
+    "--output",
+    path.join(root, "lighting"),
+    "--format",
+    "3mf",
+    "--lighting-setup",
+    "strip",
+    "--diffuser",
+    "--json",
+  ]);
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  const lightXML = Buffer.from(
+    unzipSync(await fs.readFile(path.join(root, "lighting", "first.3mf")))[
+      "3D/3dmodel.model"
+    ],
+  ).toString();
+  assert.match(lightXML, /rear-cover/);
+  assert.match(lightXML, /enclosure-foot/);
   result = await run(["--version"]);
-  assert.equal(result.stdout.trim(), "0.5.0");
+  assert.equal(result.stdout.trim(), "0.6.0");
   console.log(
     `${packaged ? "Packaged" : "Source"} CLI passed: recursive batches, spaces, STL/3MF, invalid image continuation, skip protection, dry-run, JSON and exit codes.`,
   );

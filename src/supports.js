@@ -1,3 +1,4 @@
+import { lightingParts, lightingNotes } from "./lighting.js";
 import { Shape, ExtrudeGeometry } from "three";
 
 export function supportType(s) {
@@ -6,6 +7,8 @@ export function supportType(s) {
   return ["flat", "curved", "nightlight"].includes(s.shape) ? "stand" : "none";
 }
 export function supportDimensions(s) {
+  if (s.lightingSetup && s.lightingSetup !== "none")
+    return { type: "lighting" };
   const type = supportType(s),
     c = s.fitClearance,
     wall = s.supportWall;
@@ -212,6 +215,22 @@ export function printParts(mesh, s) {
       y - panelBounds.min[1],
       z - panelBounds.min[2],
     ]);
+  if (d.type === "lighting") {
+    let right = panelBounds.size[0] + s.printGap;
+    return [
+      { name: "Lithophane", color: "#F1E8D5", mesh: panel },
+      ...lightingParts(s).map((p) => {
+        const b = bounds(p.mesh),
+          placed = transform(p.mesh, (x, y, z) => [
+            x - b.min[0] + right,
+            y - b.min[1],
+            z - b.min[2],
+          ]);
+        right += b.size[0] + s.printGap;
+        return { name: p.name, color: p.color, mesh: placed };
+      }),
+    ];
+  }
   if (d.type === "none")
     return [{ name: "Lithophane", color: "#F1E8D5", mesh }];
   const support = d.type === "stand" ? makeStand(s) : makeCase(s),
@@ -232,6 +251,8 @@ export function printParts(mesh, s) {
 }
 export function assembledPreview(mesh, s) {
   const d = supportDimensions(s);
+  if (d.type === "lighting")
+    return mergeMeshes([mesh, ...lightingParts(s).map((p) => p.assembled)]);
   if (d.type === "none") return mesh;
   const support =
     d.type === "stand"
@@ -240,6 +261,7 @@ export function assembledPreview(mesh, s) {
   return mergeMeshes([mesh, support]);
 }
 export function supportNotes(s) {
+  if (s.lightingSetup && s.lightingSetup !== "none") return lightingNotes(s);
   const d = supportDimensions(s);
   return d.type === "none"
     ? "Panel only."

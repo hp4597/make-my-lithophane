@@ -140,21 +140,49 @@ export function matchPainting(
 }
 
 // Build closed, adjacent material volumes between two sampled surfaces.
-export function volumeBetween(width, height, nx, ny, bottom, top) {
-  const n = (nx + 1) * (ny + 1),
-    positions = new Float32Array(n * 6),
-    indices = new Uint32Array(nx * ny * 12 + (nx + ny) * 12);
+export function volumeBetween(
+  width,
+  height,
+  nx,
+  ny,
+  bottom,
+  top,
+  s = { shape: "flat" },
+) {
+  const periodic = ["cylinder", "lamp"].includes(s.shape),
+    cols = periodic ? nx : nx + 1,
+    n = cols * (ny + 1);
+  const positions = new Float32Array(n * 6),
+    indices = new Uint32Array(nx * ny * 12 + (periodic ? nx : nx + ny) * 12);
   let cursor = 0;
+  const point = (u, v, d) => {
+    if (periodic) {
+      const a = u * Math.PI * 2,
+        r =
+          (width / 2) * (s.shape === "lamp" ? 1 + (s.taper - 1) * v : 1) +
+          d +
+          (s.shape === "lamp" ? s.waveDepth * Math.sin(s.waves * a) : 0);
+      return [r * Math.sin(a), (v - 0.5) * height, r * Math.cos(a)];
+    }
+    if (["curved", "nightlight"].includes(s.shape)) {
+      const angle = (s.angle * Math.PI) / 180,
+        r = width / angle,
+        a = (u - 0.5) * angle;
+      return [
+        (r + d) * Math.sin(a),
+        (v - 0.5) * height,
+        (r + d) * Math.cos(a) - r,
+      ];
+    }
+    return [(u - 0.5) * width, (v - 0.5) * height, d];
+  };
   for (let y = 0; y <= ny; y++)
-    for (let x = 0; x <= nx; x++) {
-      const k = y * (nx + 1) + x;
+    for (let x = 0; x < cols; x++) {
+      const k = y * cols + x,
+        src = y * (nx + 1) + x;
       for (let side = 0; side < 2; side++)
         positions.set(
-          [
-            (x / nx - 0.5) * width,
-            (y / ny - 0.5) * height,
-            side ? top[k] : bottom[k],
-          ],
+          point(x / nx, y / ny, side ? top[src] : bottom[src]),
           (k + side * n) * 3,
         );
     }
@@ -163,16 +191,16 @@ export function volumeBetween(width, height, nx, ny, bottom, top) {
   };
   for (let y = 0; y < ny; y++)
     for (let x = 0; x < nx; x++) {
-      const a = y * (nx + 1) + x,
-        b = a + 1,
-        d = a + nx + 1,
-        c = d + 1;
+      const a = y * cols + x,
+        b = y * cols + ((x + 1) % cols),
+        d = a + cols,
+        c = b + cols;
       quad(a + n, b + n, c + n, d + n);
       quad(a, d, c, b);
       if (y === 0) quad(a, b, b + n, a + n);
-      if (x === nx - 1) quad(b, c, c + n, b + n);
+      if (!periodic && x === nx - 1) quad(b, c, c + n, b + n);
       if (y === ny - 1) quad(c, d, d + n, c + n);
-      if (x === 0) quad(d, a, a + n, d + n);
+      if (!periodic && x === 0) quad(d, a, a + n, d + n);
     }
   return {
     positions,
@@ -217,7 +245,7 @@ export function colorLithophane(rgba, nx, ny, s, predictionOnly = false) {
     parts.push({
       name: names[c],
       color: colors[c],
-      mesh: volumeBetween(s.width, s.height, nx, ny, bottom, top),
+      mesh: volumeBetween(s.width, s.height, nx, ny, bottom, top, s),
     });
     bottom = top;
   }

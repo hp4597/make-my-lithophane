@@ -77,3 +77,7 @@ Exports contain the selected single-photo mesh plus its matching support. `--sup
 `npm test` covers CLI planning and file safety alongside geometry checks. `npm run test:cli` exercises actual headless image decoding and exports. After packaging, `node tests/cli-desktop.cjs --packaged` tests the CLI with the bundled Windows runtime.
 
 Native image resolution is the default in v0.4. Use `--resolution-mode image` to sample each photo at its own rotated pixel dimensions. Use `--resolution-mode spacing --resolution 0.1` for explicit millimeter spacing. Native resolution cannot be fully checked during dry-run until photos are decoded. Exports above 4 million cells fail explicitly without downsampling.
+
+### Lighting enclosures (0.6)
+
+Lighting settings are also accepted as kebab-case flags or saved profile keys. For example, `--shape curved --lighting-setup strip --light-kind strip --light-gap 18 --diffuser` exports the panel and lighting parts together. `--enclosure-stand` adds matching feet for panel shapes. Board presets are applied by the desktop sidebar; for CLI-only board profiles specify measured `--light-kind board --board-width 156 --board-height 120 --board-thickness 1.6 --light-projection 7.15` explicitly with `--lighting-setup custom`. That thickness/projection is an estimate for the fixed board, not a validated fit. Lighting replaces legacy auto support while enabled. CMYW remains a desktop export workflow.

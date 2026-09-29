@@ -2,7 +2,7 @@
 
 A local Windows desktop studio for turning photos into printable lithophanes. Photos remain on the device; no account or service is required.
 
-Version **0.5.0** adds a batch CLI. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
+Version **0.6.0** adds live lighting enclosures for flat panels, curved panels, cylinders, lamp shades, night lights and lightboxes, plus CMYW material export for those six shapes. The batch CLI remains available. See [CLI.md](CLI.md) for folder processing, saved profiles, JSON results, overwrite protection, and the bundled `lithophane-cli.cmd` launcher.
 
 ## Run and build
 
@@ -17,8 +17,8 @@ npm start
 
 Double-click **`build-distribution.bat`**. It installs locked dependencies, runs geometry/export tests, and builds both executables in `release/`:
 
-- **`Make My Lithophane 0.5.0 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
-- **`Make My Lithophane Setup 0.5.0.exe`** — Windows installer with installation-folder selection and desktop shortcut.
+- **`Make My Lithophane 0.6.0 Portable.exe`** — run the app without installing; no Node.js required on the destination computer.
+- **`Make My Lithophane Setup 0.6.0.exe`** — Windows installer with installation-folder selection and desktop shortcut.
 - **`win-unpacked/Make My Lithophane.exe`** — unpacked app; keep all files in that folder together.
 
 For a terminal or CI run without a final keypress: `build-distribution.bat --no-pause`. Internet is needed for build dependencies, but the resulting app works offline. The script respects an existing `NODE_EXTRA_CA_CERTS`; otherwise it exports Windows' public trusted certificates into a temporary PEM for Node, without disabling TLS verification or changing machine settings.
@@ -92,7 +92,7 @@ Width and height in the Model tab resize the panel. **Matching support: Auto** i
 
 CMYW kits include a matching support sized from actual combined material thickness, plus a layout 3MF preserving channel alignment. The CLI accepts `--support auto|none|stand|case`, `--fit-clearance`, `--support-wall` and `--print-gap`; its default Auto includes matching supports in batch exports.
 
-**Backlit** works on all ten shapes in monochrome and color-paper modes. Paper colors follow the edited photo and surface mapping; printable backing sheets remain limited to flat panels. The **CMYW studio** opens with a predicted backlit color image and updates it when layer height or color depth changes. Kits include `predicted.png`. These are illustrative optical previews, not calibrated filament predictions. CMYW geometry remains flat. Filament painting remains disabled and paused.
+**Backlit** works on all ten shapes in monochrome and color-paper modes. Paper colors follow the edited photo and surface mapping; printable backing sheets remain limited to flat panels. The **CMYW studio** opens with a predicted backlit color image and updates it when layer height or color depth changes. Kits include `predicted.png`. These are illustrative optical previews, not calibrated filament predictions. CMYW geometry supports the six priority shapes. Filament painting remains disabled and paused.
 
 ## Version 0.4: native image detail
 
@@ -104,8 +104,23 @@ Backlit 3D uses a native-resolution image texture rather than interpolating colo
 
 ## Version 0.5: one live workspace
 
-Color, matching stands/cases, optional hardware and photo layouts now live in the right sidebar. **Color & print** selects white filament, color paper or CMYW and exposes layer height/color depth directly. The existing viewport updates automatically; color selection switches to Backlit. Later edits preserve the current view and camera. CMYW preview uses the total material thickness and predicted transmission, and matching supports follow that thickness. CMYW material exports still support flat panels/light boxes; other shapes can be previewed without silently changing their shape for export. Filament painting remains disabled.
+Color, matching stands/cases, optional hardware and photo layouts now live in the right sidebar. **Color & print** selects white filament, color paper or CMYW and exposes layer height/color depth directly. The existing viewport updates automatically; color selection switches to Backlit. Later edits preserve the current view and camera. CMYW preview uses the total material thickness and predicted transmission, and matching supports follow that thickness. CMYW material exports support the six priority shapes. Filament painting remains disabled.
 
 **Supports** contains automatic matching supports and optional manual hardware dimensions. Enabling hardware displays it beside the photo; it no longer replaces the photo. Enabled hardware joins standard STL/3MF layouts and appears in CMYW kits/layouts. **Photos** contains the library, layout, gap and background controls; edits apply live without an Apply button. File dialogs and the help guide remain dialogs.
 
 `npm run test:live` checks live color/support/layout changes, rapid-edit stale-result protection and matching exported parts. Project files preserve the unified settings and hardware visibility.
+
+## Lighting enclosures (0.6)
+
+Use **Supports → Lighting & enclosure**. Setup choices mirror the reference families: no enclosure, modular board / three-size frame, fixed board frame, LED-strip lightbox, and custom attachment. They share the live mono/CMYW color setting; no popup is needed. The six priority shapes appear first in the shape list.
+
+- Flat panel and lightbox: adjustable enclosure frame, removable rear cover, panel seat, front retainer, PCB edge trays / strip trays / puck recess / socket collar.
+- Curved panel and night light: curved rear shell, end walls, lower and optional upper cap, flexible-strip guides.
+- Cylinder and lamp shade: vented base with cable pass-through, lower retainers, optional upper retainer, strip core / puck recess / measured socket collar.
+- Optional matching enclosure feet for panel shapes, plus a diffuser sheet, curved diffuser, or cylindrical sleeve. Adjustable clearance, wall, light spacing, cable notch, ventilation, retaining lip and custom rear screw-hole pattern where applicable.
+
+Housing parts follow panel size and CMYW thickness. Lighting replaces the legacy matching support while enabled. **Export project kit** includes separate printable STL parts and a separated 3MF layout; CMYW kits include four aligned material volumes and all lighting parts. Combined layouts may exceed your bed: split/rearrange parts in the slicer. The assembly uses adhesive or measured hardware; it is not a validated snap-fit system. Curved shapes use flexible strips; rigid boards require flat shapes. No-frame designs use Lighting setup: none and Matching support: none.
+
+The [Bambu modular-board drawing](https://store.bblcdn.com/s1/default/1d024884bbd542ef9f6795839b5285c0/Lithophane_LED_Backlight_Board_Kit.pdf) specifies 48 × 144 mm modules, 1.6 mm PCB thickness and 7.15 mm projection. Two, three and four modules produce derived board footprints of 96 / 144 / 192 × 144 mm. These are our frame layouts, not copied Bambu frame geometry. The [fixed-board specification](https://asia.store.bambulab.com/products/bambu-cmyk-backlight-board?id=42235769979016&modelId=1020467) lists a 156 × 120 mm PCB with a 144 × 108 mm illuminated area. Its thickness/projection fields are editable estimates. Fit panel to board uses the fixed illuminated area or a derived modular margin. Puck/socket dimensions are custom inputs, not certified hardware presets.
+
+Automated checks cover closed meshes, winding, separated layouts, live settings and six-shape color exports. Physical fit, heat, retention, optical quality and complete Bambu/Lithophane Maker feature parity are not validated. Use low-heat LEDs and test the actual hardware. Filament painting remains paused as Work in progress.
