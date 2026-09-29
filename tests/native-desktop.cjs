@@ -2,12 +2,13 @@ const { _electron: electron } = require("@playwright/test");
 const assert = require("node:assert/strict"),
   fs = require("node:fs/promises"),
   path = require("node:path");
+const { softwareGl } = require("./electron-args.cjs");
 (async () => {
   const profile = await fs.mkdtemp(
     require("node:path").join(require("node:os").tmpdir(), "litho-test-"),
   );
   const app = await electron.launch({
-    args: [".", "--user-data-dir=" + profile],
+    args: [".", "--user-data-dir=" + profile, ...softwareGl],
   });
   try {
     const page = await app.firstWindow(),

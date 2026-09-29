@@ -3,6 +3,7 @@ const assert = require("node:assert/strict"),
   path = require("node:path"),
   fs = require("node:fs/promises"),
   { unzipSync, strFromU8 } = require("fflate");
+const { softwareGl } = require("./electron-args.cjs");
 async function dismissChooser(page) {
   if (await page.locator("#type-chooser").evaluate((d) => d.open))
     await page.locator("#close-type-chooser").click();
@@ -12,7 +13,7 @@ async function dismissChooser(page) {
     require("node:path").join(require("node:os").tmpdir(), "litho-test-"),
   );
   const app = await electron.launch({
-    args: [".", "--user-data-dir=" + profile],
+    args: [".", "--user-data-dir=" + profile, ...softwareGl],
   });
   try {
     assert.equal(
@@ -56,11 +57,15 @@ async function dismissChooser(page) {
       page.locator('[data-setting="colorDepth"]').fill("0.16"),
     );
     assert.notEqual(await hash(), colorA);
-    await update(async () => {
-      await page.locator('[data-setting="colorDepth"]').fill("0.32");
-      await page.locator('[data-setting="colorDepth"]').fill("0.64");
-      await page.locator('[data-setting="colorMode"]').selectOption("mono");
-    });
+    await update(() =>
+      page.locator('[data-setting="colorDepth"]').fill("0.32"),
+    );
+    await update(() =>
+      page.locator('[data-setting="colorDepth"]').fill("0.64"),
+    );
+    await update(() =>
+      page.locator('[data-setting="colorMode"]').selectOption("mono"),
+    );
     assert.equal(
       await page.locator("#viewport").getAttribute("data-color-mode"),
       "mono",

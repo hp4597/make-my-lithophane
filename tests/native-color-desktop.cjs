@@ -3,12 +3,13 @@ const { _electron: electron } = require("@playwright/test"),
   path = require("node:path"),
   assert = require("node:assert/strict");
 const { Unzip, UnzipInflate } = require("fflate");
+const { softwareGl } = require("./electron-args.cjs");
 (async () => {
   const profile = await fs.mkdtemp(
     path.join(require("node:os").tmpdir(), "litho-native-color-"),
   );
   const app = await electron.launch({
-    args: [".", "--user-data-dir=" + profile],
+    args: [".", "--user-data-dir=" + profile, ...softwareGl],
   });
   try {
     const page = await app.firstWindow(),

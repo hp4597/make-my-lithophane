@@ -1,6 +1,7 @@
 const { _electron: electron } = require("@playwright/test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
+const { softwareGl } = require("./electron-args.cjs");
 async function dismissChooser(page) {
   if (await page.locator("#type-chooser").evaluate((d) => d.open))
     await page.locator("#close-type-chooser").click();
@@ -14,7 +15,7 @@ async function chooseShape(page, shape) {
     require("node:path").join(require("node:os").tmpdir(), "litho-test-"),
   );
   const app = await electron.launch({
-    args: [".", "--user-data-dir=" + profile],
+    args: [".", "--user-data-dir=" + profile, ...softwareGl],
   });
   try {
     const page = await app.firstWindow(),

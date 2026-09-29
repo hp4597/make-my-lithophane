@@ -3,6 +3,7 @@ const assert = require("node:assert/strict"),
   fs = require("node:fs/promises"),
   path = require("node:path"),
   { unzipSync, strFromU8 } = require("fflate");
+const { softwareGl } = require("./electron-args.cjs");
 async function dismissChooser(page) {
   if (await page.locator("#type-chooser").evaluate((d) => d.open))
     await page.locator("#close-type-chooser").click();
@@ -16,7 +17,7 @@ async function chooseShape(page, shape) {
     path.join(require("node:os").tmpdir(), "litho-lighting-"),
   );
   const app = await electron.launch({
-    args: [".", "--user-data-dir=" + profile],
+    args: [".", "--user-data-dir=" + profile, ...softwareGl],
   });
   try {
     const page = await app.firstWindow(),
