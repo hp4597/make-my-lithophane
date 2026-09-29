@@ -20,6 +20,8 @@ const assert = require("node:assert/strict");
       null,
       { timeout: 30000 },
     );
+    if (await page.locator("#type-chooser").evaluate((d) => d.open))
+      await page.locator("#close-type-chooser").click();
     assert.ok((await page.locator("#model-triangles").textContent()) !== "—");
     await page.screenshot({ path: "test-results/packaged-studio.png" });
     await page.locator("#color-studio-open").click();

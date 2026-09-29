@@ -33,14 +33,39 @@ import "./advanced.css";
 
 const $ = (s) => document.querySelector(s),
   icon = (name) => `<i data-lucide="${name}"></i>`;
+
+const PRODUCT_BLURBS = {
+  flat: "Classic rectangular panel for wall or stand display.",
+  curved: "Gently curved panel that catches light from behind.",
+  cylinder: "Full wrap cylinder for lamps and centerpieces.",
+  lamp: "Tapered shade with optional wavy perimeter.",
+  nightlight: "Compact curved panel for a bedside glow.",
+  box: "Panel with a fitted open-front enclosure.",
+  sphere: "Spherical shell with a bottom LED opening.",
+  moon: "Sphere with procedural lunar relief.",
+  heart: "Heart-shaped lithophane silhouette.",
+  silhouette: "Threshold cutout of dark tones only.",
+};
+
+const FEATURED_SHAPES = [
+  "flat",
+  "curved",
+  "cylinder",
+  "lamp",
+  "nightlight",
+  "box",
+];
+
 let settings = { ...defaults },
   image,
   imageSource,
   filename = "Alpine light · sample",
   revision = 0,
   timer,
-  activeTab = "model",
-  busy = false;
+  activeTab = "size",
+  busy = false,
+  typeChosen = false,
+  photosExpanded = false;
 let photoLibrary, colorStudio, mountStudio;
 const composedImage = () => photoLibrary?.getImage() || image;
 const worker = new Worker(new URL("./mesh.worker.js", import.meta.url), {
@@ -92,12 +117,140 @@ function generate(
   });
 }
 
+function shapeLabel(id) {
+  return shapes.find((x) => x[0] === id)?.[1] || id;
+}
+
 $("#app").innerHTML = `
-<header><div class="brand"><span class="brand-mark">${icon("layers-3")}</span><div>make my <b>lithophane</b><small>DESKTOP STUDIO</small></div></div><div class="project-title"><span class="dot"></span><input id="project-name" aria-label="Project name" value="Untitled project"/><span class="badge">LOCAL</span></div><div class="header-actions"><button id="open-project">${icon("folder-open")} Open</button><button id="save-project">${icon("save")} Save project</button><button class="primary" id="export-top">${icon("download")} Export model</button></div></header>
-<div class="workspace"><aside class="left"><div class="section-heading"><span>YOUR PHOTO</span><span class="step">01</span></div><button class="photo-card" id="upload"><img id="photo-thumb" alt="Current source image"/><span>${icon("image-plus")} Change photo</span></button><div class="photo-caption"><span id="filename"></span><button id="reset-image" title="Reset photo adjustments">${icon("rotate-ccw")}</button></div><button class="upload-secondary" id="add-photo">${icon("upload")} Import photo</button><p class="hint">PNG, JPG or WebP · processed on your device</p><div class="section-heading spaced"><span>CHOOSE A SHAPE</span><span class="step">02</span></div><div class="shape-grid">${shapes.map(([id, label, glyph]) => `<button class="shape ${id === "flat" ? "selected" : ""}" data-shape="${id}">${icon(glyph)}<span>${label}</span></button>`).join("")}</div><div class="local-note">${icon("shield-check")}<div><b>Your memories stay yours.</b><br/>No uploads. No account. Works offline.</div></div><button id="guide" class="guide-button">${icon("book-open")} Printing & feature guide ${icon("arrow-up-right")}</button></aside>
-<main><div class="canvas-bar"><div><span class="eyebrow">WORKSPACE</span><h1 id="shape-title">Flat panel</h1></div><div class="view-modes"><button data-view="solid" class="active">${icon("box")} Solid</button><button data-view="light">${icon("sun")} Backlit</button><button data-view="wire">${icon("grid-3x3")} Mesh</button></div></div><div id="viewport"><div class="preview-label"><span class="dot"></span> LIVE 3D PREVIEW <span id="preview-quality">Draft mesh</span></div><div class="viewport-tools"><button id="reset-view" title="Fit model">${icon("maximize")}</button><button id="front-view" title="Front view">${icon("scan-face")}</button><button id="grid-toggle" title="Toggle build grid">${icon("grid-2x2")}</button><button id="screenshot" title="Save preview image">${icon("camera")}</button></div><div class="canvas-hint">${icon("mouse")} Drag to orbit <span>·</span> Scroll to zoom <span>·</span> Right-drag to pan</div><div id="busy-indicator" hidden>Generating model…</div></div><div class="model-info"><div><span>MODEL SIZE</span><strong id="model-size">—</strong></div><div><span>EST. SOLID PLA</span><strong id="model-weight">—</strong></div><div><span>PREVIEW TRIANGLES</span><strong id="model-triangles">—</strong></div><div class="quality-note">${icon("sparkles")} Full detail on export</div></div><div class="bottom-tip">${icon("lightbulb")} <span>A little light makes all the difference. Switch to <b>Backlit</b> to inspect the image.</span></div></main>
-<aside class="right"><div class="settings-tabs"><button data-tab="model" class="active">Model</button><button data-tab="image">Image</button><button data-tab="print">Color & print</button><button data-tab="supports">Supports</button><button data-tab="photos">Photos</button></div><div id="settings-panel"></div><div id="tool-panels"></div><div class="export-section"><div class="export-summary"><span id="export-spacing">0.35 mm detail</span><span>STL · millimeters</span></div><button class="primary export-button" id="export">${icon("download")} Export STL ${icon("arrow-right")}</button><button id="export-3mf">Export 3MF model</button><button id="export-kit">Export project kit (.zip)</button><p>Includes model, settings and printing notes.</p></div></aside></div><footer><span><span class="dot"></span> <span id="status">Ready to create</span></span><span>MAKE MY LITHOPHANE <b>v0.6.1</b> <span class="separator">/</span> OFFLINE STUDIO</span></footer>
-<input id="image-file" type="file" accept="image/png,image/jpeg,image/webp" hidden/><input id="project-file" type="file" accept=".litho,.json" hidden/><dialog id="guide-modal"><button id="close-guide" class="dialog-close">${icon("x")}</button><span class="eyebrow">FROM PHOTO TO PRINT</span><h2>A memory you can hold.</h2><p>Import a photo, choose a shape, adjust thickness, then export an STL in millimeters for your slicer. The preview uses a lighter mesh; exported detail follows your resolution setting.</p><h3>Starting points</h3><ul><li>White PLA, 0.12 mm layers, 100% infill, and slow outer walls are useful starting settings. Tune them for your printer.</li><li>Print flat panels upright with a brim for stability. Check supports for curved parts, hearts, and spheres in your slicer.</li><li>Test a small thickness calibration strip with your filament and light source before a full print.</li><li>Use a low-heat LED light source and leave space for ventilation.</li></ul><h3>What this version supports</h3><p>Flat and curved panels, open cylinders and tapered lamps, spheres with a bottom opening, procedural moon relief, hearts, threshold silhouettes, curved night-light panels, and light-box panels with a separate enclosure. Rotate, mirror, crop, adjust tone, add text, save projects, export STL and 1:1 color sheets.</p><h3>Limits & experimental features</h3><p>Backlit view is an illustration, not a calibrated light simulation. Moon relief is procedural, not a lunar map. Silhouettes can contain disconnected islands. Night-light panels have no hardware-specific clips. The color studio supports experimental CMYW material volumes. Filament painting is Work in progress and is paused until explicitly requested. Photo libraries support collages, panoramas, and batch panels. The hardware workshop produces separate generic rings, spoke adapters, stands and U-channel clips. Color accuracy and hardware fit require physical calibration. This is an independent app, not verified feature-for-feature parity with Lithophane Maker Desktop.</p><button id="calibration" class="primary">Export thickness calibration strip</button></dialog><div id="toast" role="status"></div>`;
+<header class="top-bar">
+  <div class="brand"><span class="brand-mark">${icon("layers-3")}</span><div>make my <b>lithophane</b><small>DESKTOP STUDIO</small></div></div>
+  <div class="project-title"><span class="dot"></span><input id="project-name" aria-label="Project name" value="Untitled project"/><span class="badge">LOCAL</span></div>
+  <div class="print-mode" role="group" aria-label="Print mode">
+    <button type="button" data-print-mode="mono" class="active" id="mode-mono">Mono</button>
+    <button type="button" data-print-mode="cmyw" id="mode-cmyw">CMYW Color</button>
+    <label class="print-more"><span>More</span>
+      <select data-setting="colorMode" id="color-mode-select" aria-label="Color mode">
+        <option value="mono">Mono</option>
+        <option value="paper">Color paper</option>
+        <option value="cmyw">CMYW Color</option>
+        <option value="painting" disabled>Filament painting · Work in progress</option>
+      </select>
+    </label>
+  </div>
+  <div class="header-actions">
+    <button type="button" id="open-project">${icon("folder-open")} Open</button>
+    <button type="button" id="save-project">${icon("save")} Save</button>
+    <button type="button" class="primary" id="export-top">${icon("download")} Export</button>
+  </div>
+</header>
+<div class="workspace">
+  <aside class="left-rail" aria-label="Actions">
+    <button type="button" id="change-type" class="rail-btn" title="Choose lithophane type">${icon("shapes")}<span>Type</span></button>
+    <button type="button" id="upload" class="rail-btn" title="Change photo">${icon("image-plus")}<span>Photo</span></button>
+    <button type="button" id="add-photo" class="rail-btn" title="Import photo">${icon("upload")}<span>Import</span></button>
+    <button type="button" id="guide" class="rail-btn" title="Printing guide">${icon("book-open")}<span>Guide</span></button>
+    <div id="tool-anchors" class="rail-anchors"></div>
+    <div class="rail-thumb"><img id="photo-thumb" alt="Current source image"/><span id="filename"></span></div>
+  </aside>
+  <main>
+    <div class="canvas-bar">
+      <div>
+        <span class="eyebrow">WORKSPACE</span>
+        <h1 id="shape-title">Flat panel</h1>
+        <button type="button" id="change-type-inline" class="linkish">${icon("refresh-cw")} Change type</button>
+      </div>
+      <div class="view-modes">
+        <button type="button" data-view="solid" class="active">${icon("box")} Solid</button>
+        <button type="button" data-view="light">${icon("sun")} Backlit</button>
+        <button type="button" data-view="wire">${icon("grid-3x3")} Mesh</button>
+      </div>
+    </div>
+    <div id="viewport">
+      <div class="preview-label"><span class="dot"></span> LIVE 3D PREVIEW <span id="preview-quality">Draft mesh</span></div>
+      <div class="viewport-tools">
+        <button type="button" id="reset-view" title="Fit model">${icon("maximize")}</button>
+        <button type="button" id="front-view" title="Front view">${icon("scan-face")}</button>
+        <button type="button" id="grid-toggle" title="Toggle build grid">${icon("grid-2x2")}</button>
+        <button type="button" id="screenshot" title="Save preview image">${icon("camera")}</button>
+      </div>
+      <div class="canvas-hint">${icon("mouse")} Drag to orbit <span>·</span> Scroll to zoom <span>·</span> Right-drag to pan</div>
+      <div id="busy-indicator" hidden>Generating model…</div>
+    </div>
+    <div class="model-info">
+      <div><span>MODEL SIZE</span><strong id="model-size">—</strong></div>
+      <div><span>EST. SOLID PLA</span><strong id="model-weight">—</strong></div>
+      <div><span>PREVIEW TRIANGLES</span><strong id="model-triangles">—</strong></div>
+      <div class="quality-note">${icon("sparkles")} Full detail on export</div>
+    </div>
+    <div class="bottom-tip">${icon("lightbulb")} <span>A little light makes all the difference. Switch to <b>Backlit</b> to inspect the image.</span></div>
+  </main>
+  <aside class="right" aria-label="Inspector">
+    <div class="settings-tabs">
+      <button type="button" data-tab="size" class="active">Size</button>
+      <button type="button" data-tab="image">Image</button>
+      <button type="button" data-tab="frame">Frame</button>
+      <button type="button" data-tab="light">Light</button>
+    </div>
+    <div id="cmyw-strip" class="cmyw-strip" hidden></div>
+    <div id="settings-panel"></div>
+    <div id="tool-panels"></div>
+    <div class="export-section">
+      <div class="export-summary"><span id="export-spacing">0.35 mm detail</span><span>STL · millimeters</span></div>
+      <button type="button" class="primary export-button" id="export">${icon("download")} Export STL ${icon("arrow-right")}</button>
+      <button type="button" id="export-3mf">Export 3MF model</button>
+      <button type="button" id="export-kit">Export project kit (.zip)</button>
+      <button type="button" id="open-export-panel" class="wide">Review export summary…</button>
+      <p>Includes model, settings and printing notes.</p>
+    </div>
+  </aside>
+</div>
+<footer>
+  <span><span class="dot"></span> <span id="status">Ready to create</span></span>
+  <span>MAKE MY LITHOPHANE <b>v0.6.1</b> <span class="separator">/</span> OFFLINE STUDIO</span>
+</footer>
+<input id="image-file" type="file" accept="image/png,image/jpeg,image/webp" hidden/>
+<input id="project-file" type="file" accept=".litho,.json" hidden/>
+<dialog id="type-chooser" class="type-chooser">
+  <button type="button" id="close-type-chooser" class="dialog-close" aria-label="Close">${icon("x")}</button>
+  <span class="eyebrow">MAKE MY LITHOPHANE</span>
+  <h2>Choose Lithophane Type</h2>
+  <p class="chooser-lead">Pick a product. Each card configures the existing geometry and settings — no separate engines.</p>
+  <div class="chooser-section"><span class="chooser-heading">Featured</span><div class="product-grid" id="featured-products"></div></div>
+  <div class="chooser-section"><span class="chooser-heading">More shapes</span><div class="product-grid secondary" id="secondary-products"></div></div>
+</dialog>
+<dialog id="export-modal" class="export-modal">
+  <button type="button" id="close-export-modal" class="dialog-close" aria-label="Close">${icon("x")}</button>
+  <span class="eyebrow">EXPORT REVIEW</span>
+  <h2>Ready to export</h2>
+  <div id="export-review-body" class="export-review-body"></div>
+  <div class="export-actions">
+    <button type="button" class="primary" id="export-review-stl">${icon("download")} Confirm STL export</button>
+    <button type="button" id="export-review-3mf">Confirm 3MF export</button>
+    <button type="button" id="export-review-kit">Confirm project kit</button>
+    <button type="button" id="export-color-modal" hidden>Confirm CMYW kit</button>
+  </div>
+  <p class="hint">Reuses the existing STL, 3MF and project-kit generators. Inspect orientation and scale in your slicer.</p>
+</dialog>
+<dialog id="guide-modal">
+  <button type="button" id="close-guide" class="dialog-close">${icon("x")}</button>
+  <span class="eyebrow">FROM PHOTO TO PRINT</span>
+  <h2>A memory you can hold.</h2>
+  <p>Import a photo, choose a type, adjust size and light, then export an STL in millimeters for your slicer. The preview uses a lighter mesh; exported detail follows your resolution setting.</p>
+  <h3>Starting points</h3>
+  <ul>
+    <li>White PLA, 0.12 mm layers, 100% infill, and slow outer walls are useful starting settings. Tune them for your printer.</li>
+    <li>Print flat panels upright with a brim for stability. Check supports for curved parts, hearts, and spheres in your slicer.</li>
+    <li>Test a small thickness calibration strip with your filament and light source before a full print.</li>
+    <li>Use a low-heat LED light source and leave space for ventilation.</li>
+  </ul>
+  <h3>What this version supports</h3>
+  <p>Flat and curved panels, open cylinders and tapered lamps, spheres with a bottom opening, procedural moon relief, hearts, threshold silhouettes, curved night-light panels, and light-box panels with a separate enclosure. Rotate, mirror, crop, adjust tone, add text, save projects, export STL and 1:1 color sheets.</p>
+  <h3>Limits & experimental features</h3>
+  <p>Backlit view is an illustration, not a calibrated light simulation. Moon relief is procedural, not a lunar map. Silhouettes can contain disconnected islands. Night-light panels have no hardware-specific clips. The color studio supports experimental CMYW material volumes. Filament painting is Work in progress and is paused until explicitly requested. Photo libraries support collages, panoramas, and batch panels. The hardware workshop produces separate generic rings, spoke adapters, stands and U-channel clips. Color accuracy and hardware fit require physical calibration. This is an independent app, not verified feature-for-feature parity with Lithophane Maker Desktop.</p>
+  <button type="button" id="calibration" class="primary">Export thickness calibration strip</button>
+</dialog>
+<div id="toast" role="status"></div>`;
+
 const preview = new Preview($("#viewport"));
 function refreshIcons() {
   createIcons({ icons, attrs: { "stroke-width": 1.7 } });
@@ -111,49 +264,163 @@ function range(key, label, min, max, step = 1, unit = "") {
 function check(key, label) {
   return `<label class="check"><input type="checkbox" data-setting="${key}" ${settings[key] ? "checked" : ""}/><span>${label}</span></label>`;
 }
+
+function syncPrintModeUI() {
+  document
+    .querySelectorAll("[data-print-mode]")
+    .forEach((b) =>
+      b.classList.toggle(
+        "active",
+        (settings.colorMode === "mono" && b.dataset.printMode === "mono") ||
+          (settings.colorMode === "cmyw" && b.dataset.printMode === "cmyw"),
+      ),
+    );
+  const modeSelect = $("#color-mode-select");
+  if (modeSelect) modeSelect.value = settings.colorMode;
+  const strip = $("#cmyw-strip");
+  if (settings.colorMode === "cmyw") {
+    strip.hidden = false;
+    strip.innerHTML = `<div class="panel-title">CMYW print</div><div class="field-row">${field("layer", "Layer height", 0.04, 0.3, 0.01)}${field("colorDepth", "Color depth", 0.04, 1.6, 0.04)}</div><p class="hint">Experimental CMYW transmission for the six priority shapes. Filament painting stays disabled.</p><button type="button" id="export-color" class="wide primary">Export CMYW kit</button>`;
+  } else if (settings.colorMode === "paper") {
+    strip.hidden = false;
+    strip.innerHTML = `<div class="panel-title">Color paper</div><button type="button" id="color-sheet" class="wide">Export 1:1 color sheet (SVG)</button><p class="hint">Printable backing sheets support flat panels.</p>`;
+  } else {
+    strip.hidden = true;
+    strip.innerHTML = "";
+  }
+  const modalColor = $("#export-color-modal");
+  if (modalColor) modalColor.hidden = settings.colorMode !== "cmyw";
+  $("#export").innerHTML =
+    settings.colorMode === "cmyw"
+      ? `${icon("download")} Export CMYW kit`
+      : `${icon("download")} Export STL ${icon("arrow-right")}`;
+  refreshIcons();
+}
+
+function renderTypeChooser() {
+  $("#featured-products").innerHTML = shapes
+    .filter(([id]) => FEATURED_SHAPES.includes(id))
+    .map(([id, label, glyph]) => {
+      return `<button type="button" class="product-card ${id === settings.shape ? "selected" : ""} featured" data-shape="${id}" data-product="${id}">
+        <span class="product-icon">${icon(glyph)}</span>
+        <span class="product-label">${label}</span>
+        <span class="product-blurb">${PRODUCT_BLURBS[id] || ""}</span>
+      </button>`;
+    })
+    .join("");
+  $("#secondary-products").innerHTML = shapes
+    .filter(([id]) => !FEATURED_SHAPES.includes(id))
+    .map(([id, label, glyph]) => {
+      return `<button type="button" class="product-card ${id === settings.shape ? "selected" : ""}" data-shape="${id}" data-product="${id}">
+        <span class="product-icon">${icon(glyph)}</span>
+        <span class="product-label">${label}</span>
+        <span class="product-blurb">${PRODUCT_BLURBS[id] || ""}</span>
+      </button>`;
+    })
+    .join("");
+  refreshIcons();
+}
+
+function openTypeChooser() {
+  renderTypeChooser();
+  $("#type-chooser").showModal();
+}
+
+function selectShape(id, { closeChooser = true, resetView = true } = {}) {
+  settings.shape = id;
+  typeChosen = true;
+  $("#shape-title").textContent = shapeLabel(id);
+  document
+    .querySelectorAll("[data-shape]")
+    .forEach((el) => el.classList.toggle("selected", el.dataset.shape === id));
+  if (closeChooser && $("#type-chooser").open) $("#type-chooser").close();
+  renderSettings();
+  schedule(resetView);
+}
+
 function renderSettings() {
   const round = ["cylinder", "lamp", "sphere", "moon"].includes(settings.shape),
     sphere = ["sphere", "moon"].includes(settings.shape);
   let html = "";
-  if (activeTab === "model")
-    html = `<div class="panel-title">Dimensions <span>01</span></div><div class="field-row">${field("width", round ? "Inner diameter" : "Width", 20, 500)}${sphere ? "" : field("height", "Height", 20, 500)}</div><p class="hint">${round ? "Diameter is measured at the inner base." : "Width follows the surface, including the border."}</p><div class="panel-title">Thickness <span>02</span></div><div class="field-row">${field("min", "Minimum", 0.4, 9.9, 0.1)}${field("max", "Maximum", 0.5, 10, 0.1)}</div><div class="thickness-scale"><span>Light areas</span><span>Dark areas</span></div><div class="gradient-scale"></div><div class="panel-title">Detail & finish <span>03</span></div>${`<label class="field"><span>Resolution</span><select data-setting="resolutionMode"><option value="image" ${settings.resolutionMode === "image" ? "selected" : ""}>Match image pixels (native)</option><option value="spacing" ${settings.resolutionMode === "spacing" ? "selected" : ""}>Custom spacing</option></select></label>`}${settings.resolutionMode === "spacing" ? field("resolution", "Sample spacing", 0.01, 2, 0.01, "mm / sample") : ""}<p class="hint">Native mode uses the photo pixel dimensions. Custom spacing controls mesh detail in millimeters.</p>${!round ? range("border", "Solid border", 0, 15, 0.5, " mm") : ""}${["curved", "nightlight"].includes(settings.shape) ? range("angle", "Curve angle", 10, 300, 1, "°") : ""}${settings.shape === "lamp" ? range("taper", "Top / base diameter", 0.3, 1.5, 0.05) : ""}${sphere ? field("opening", "Bottom opening diameter", 5, settings.width - 8, 1) : ""}${settings.shape === "moon" ? range("moon", "Procedural lunar texture", 0, 1, 0.05) : ""}${settings.shape === "silhouette" ? range("threshold", "Keep tones darker than", 0.05, 1, 0.01) : ""}${settings.shape === "box" ? field("boxDepth", "Enclosure depth", 15, 100, 1) : ""}<div class="note">${icon("info")}<span>${sphere ? "Sphere has a closed top and an open bottom for an LED." : settings.shape === "nightlight" ? "Curved panel only. Hardware-specific clips are not included." : settings.shape === "box" ? "Auto support includes a fitted open-front case with an adjustable clearance." : settings.shape === "silhouette" ? "White regions are removed. Check disconnected islands in your slicer." : "Dark pixels create thicker material; light pixels let more light through."}</span></div>`;
-  if (activeTab === "model" && settings.shape === "silhouette")
-    html += check("largestIsland", "Keep only the largest connected shape");
-  if (activeTab === "image")
-    html = `<div class="panel-title">Compose your photo</div><div class="button-row"><button id="rotate-photo">${icon("rotate-cw")} Rotate 90°</button><button id="auto-tone">${icon("wand-sparkles")} Auto tone</button></div>${check("flip", "Mirror horizontally")}<label class="field"><span>Photo fit</span><select data-setting="fit"><option value="cover" ${settings.fit === "cover" ? "selected" : ""}>Fill & crop</option><option value="contain" ${settings.fit === "contain" ? "selected" : ""}>Fit whole image</option></select></label>${range("zoom", "Zoom", 1, 4, 0.05, "×")}${range("panX", "Horizontal position", -100, 100)}${range("panY", "Vertical position", -100, 100)}<div class="panel-title">Light & tone</div>${range("brightness", "Brightness", -100, 100)}${range("contrast", "Contrast", -90, 100)}${range("gamma", "Gamma", 0.2, 3, 0.05)}${check("invert", "Invert light and dark")}<div class="panel-title">Personalize</div><label class="field"><span>Caption</span><input data-setting="text" maxlength="80" value="" placeholder="Add a name, date or memory"/></label>${range("textSize", "Text size", 3, 30, 1, " mm")}`;
-  if (activeTab === "print")
-    html = `<div class="panel-title">Color & printing</div><label class="field"><span>Color mode</span><select data-setting="colorMode"><option value="mono" ${settings.colorMode === "mono" ? "selected" : ""}>White filament</option><option value="paper" ${settings.colorMode === "paper" ? "selected" : ""}>Color paper backing</option><option value="cmyw" ${settings.colorMode === "cmyw" ? "selected" : ""}>CMYW color lithophane</option><option value="painting" disabled>Filament painting · Work in progress</option></select></label><p class="hint">Changes update the displayed model automatically. Backlit shows the predicted image.</p>${settings.colorMode === "cmyw" ? `${field("layer", "Layer height", 0.04, 0.3, 0.01)}${field("colorDepth", "Maximum color depth", 0.04, 1.6, 0.04)}<p class="hint">Experimental CMYW transmission. Material export supports the six priority shapes. Color geometry has no border or hanging holes.</p><button id="export-color" class="primary wide">Export CMYW kit</button>` : settings.colorMode === "paper" ? `<button id="color-sheet" class="wide">Export 1:1 color sheet (SVG)</button><p class="hint">Printable backing sheets support flat panels.</p>` : ""}<div class="panel-title">Filament thickness</div><div class="preset-list"><button data-preset="standard">White PLA</button><button data-preset="thin">Bright LED / thin panel</button><button data-preset="thick">High contrast</button></div><button id="calibration-panel" class="wide">Export calibration strip</button><p class="hint">Filament painting remains Work in progress.</p>`;
-  if (activeTab === "image")
-    html += `<div class="panel-title">Color adjustments</div>${range("hue", "Hue shift", -180, 180, 1, "°")}${range("saturation", "Saturation", -100, 100, 1)}`;
-  if (activeTab === "model" && settings.shape === "lamp")
-    html += `<div class="panel-title">Wavy shade</div>${field("waves", "Waves around perimeter", 0, 24, 1, "waves")}${field("waveDepth", "Wave depth", 0, 5, 0.1)}`;
-  if (
-    activeTab === "model" &&
-    ["flat", "curved", "box", "nightlight"].includes(settings.shape)
-  )
-    html += `<div class="panel-title">Hanging holes</div>${check("holes", "Two holes in the top border")}${field("holeDiameter", "Hole diameter", 1, 10, 0.1)}<p class="hint">Set the border at least 2 mm wider than the holes. Preview resolution may simplify small openings.</p>`;
-  if (activeTab === "supports")
-    html +=
-      lightingPanel(settings, field) +
-      `<div class="panel-title">Matching support</div><label class="field"><span>Include with exports</span><select data-setting="support">${["auto", "none", "stand", "case"].map((v) => `<option value="${v}" ${settings.support === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>${field("fitClearance", "Fit clearance / side", 0.05, 2, 0.05)}${field("supportWall", "Support wall", 1, 6, 0.1)}${field("printGap", "Print spacing", 2, 50, 1)}${settings.shape !== "box" ? field("boxDepth", "Case depth", 15, 100, 1) : ""}<p class="hint" id="support-size">Support follows panel dimensions automatically.</p>`;
+  if (activeTab === "size") {
+    html = `<div class="panel-title">Dimensions <span>01</span></div><div class="field-row">${field("width", round ? "Inner diameter" : "Width", 20, 500)}${sphere ? "" : field("height", "Height", 20, 500)}</div><p class="hint">${round ? "Diameter is measured at the inner base." : "Width follows the surface, including the border."}</p><div class="panel-title">Thickness <span>02</span></div><div class="field-row">${field("min", "Minimum", 0.4, 9.9, 0.1)}${field("max", "Maximum", 0.5, 10, 0.1)}</div><div class="thickness-scale"><span>Light areas</span><span>Dark areas</span></div><div class="gradient-scale"></div><div class="panel-title">Detail & finish <span>03</span></div>${`<label class="field"><span>Resolution</span><select data-setting="resolutionMode"><option value="image" ${settings.resolutionMode === "image" ? "selected" : ""}>Match image pixels (native)</option><option value="spacing" ${settings.resolutionMode === "spacing" ? "selected" : ""}>Custom spacing</option></select></label>`}${settings.resolutionMode === "spacing" ? field("resolution", "Sample spacing", 0.01, 2, 0.01, "mm / sample") : ""}<p class="hint">Native mode uses the photo pixel dimensions. Custom spacing controls mesh detail in millimeters.</p>${!round ? range("border", "Solid border", 0, 15, 0.5, " mm") : ""}${["curved", "nightlight"].includes(settings.shape) ? range("angle", "Curve angle", 10, 300, 1, "°") : ""}${settings.shape === "lamp" ? range("taper", "Top / base diameter", 0.3, 1.5, 0.05) : ""}${sphere ? field("opening", "Bottom opening diameter", 5, settings.width - 8, 1) : ""}${settings.shape === "moon" ? range("moon", "Procedural lunar texture", 0, 1, 0.05) : ""}${settings.shape === "silhouette" ? range("threshold", "Keep tones darker than", 0.05, 1, 0.01) : ""}${settings.shape === "box" ? field("boxDepth", "Enclosure depth", 15, 100, 1) : ""}<div class="note">${icon("info")}<span>${sphere ? "Sphere has a closed top and an open bottom for an LED." : settings.shape === "nightlight" ? "Curved panel only. Hardware-specific clips are not included." : settings.shape === "box" ? "Auto frame includes a fitted open-front case with an adjustable clearance." : settings.shape === "silhouette" ? "White regions are removed. Check disconnected islands in your slicer." : "Dark pixels create thicker material; light pixels let more light through."}</span></div>`;
+    if (settings.shape === "silhouette")
+      html += check("largestIsland", "Keep only the largest connected shape");
+    if (settings.shape === "lamp")
+      html += `<div class="panel-title">Wavy shade</div>${field("waves", "Waves around perimeter", 0, 24, 1, "waves")}${field("waveDepth", "Wave depth", 0, 5, 0.1)}`;
+    if (["flat", "curved", "box", "nightlight"].includes(settings.shape))
+      html += `<div class="panel-title">Hanging holes</div>${check("holes", "Two holes in the top border")}${field("holeDiameter", "Hole diameter", 1, 10, 0.1)}<p class="hint">Set the border at least 2 mm wider than the holes. Preview resolution may simplify small openings.</p>`;
+    html += `<div class="panel-title">Filament thickness</div><div class="preset-list"><button type="button" data-preset="standard">White PLA</button><button type="button" data-preset="thin">Bright LED / thin panel</button><button type="button" data-preset="thick">High contrast</button></div><button type="button" id="calibration-panel" class="wide">Export calibration strip</button><p class="hint">Use the top Mono / CMYW switch for print mode. Color paper is under More.</p>`;
+  }
+  if (activeTab === "image") {
+    html = `<div class="panel-title">Source</div><button type="button" class="photo-card inspector-photo" id="upload-inspector"><img id="photo-thumb-inspector" alt=""/><span>${icon("image-plus")} Replace image</span></button><div class="photo-caption"><span id="filename-inspector"></span><button type="button" id="reset-image" title="Reset photo adjustments">${icon("rotate-ccw")}</button></div><div class="panel-title">Compose</div><div class="button-row"><button type="button" id="rotate-photo">${icon("rotate-cw")} Rotate 90°</button><button type="button" id="auto-tone">${icon("wand-sparkles")} Auto tone</button></div>${check("flip", "Mirror horizontally")}<label class="field"><span>Photo fit</span><select data-setting="fit"><option value="cover" ${settings.fit === "cover" ? "selected" : ""}>Fill & crop</option><option value="contain" ${settings.fit === "contain" ? "selected" : ""}>Fit whole image</option></select></label>${range("zoom", "Zoom", 1, 4, 0.05, "×")}${range("panX", "Horizontal position", -100, 100)}${range("panY", "Vertical position", -100, 100)}<div class="panel-title">Light & tone</div>${range("brightness", "Brightness", -100, 100)}${range("contrast", "Contrast", -90, 100)}${range("gamma", "Gamma", 0.2, 3, 0.05)}${check("invert", "Invert light and dark")}<details class="advanced-block"><summary>Advanced tone & color</summary>${range("hue", "Hue shift", -180, 180, 1, "°")}${range("saturation", "Saturation", -100, 100, 1)}</details><div class="panel-title">Personalize</div><label class="field"><span>Caption</span><input data-setting="text" maxlength="80" value="" placeholder="Add a name, date or memory"/></label>${range("textSize", "Text size", 3, 30, 1, " mm")}<details class="advanced-block" ${photosExpanded ? "open" : ""} id="photos-disclosure"><summary>Multi-photo library & layouts</summary><p class="hint">Collage, panorama, batch panels and four-wall kits stay here — not a permanent Photos tab.</p><button type="button" id="library-open-inline" class="wide">Open photo library</button></details>`;
+  }
+  if (activeTab === "frame") {
+    html = `<div class="panel-title">Frame & mount</div><label class="field"><span>Frame style</span><select data-setting="support">${[
+      ["auto", "Basic / auto"],
+      ["none", "None — panel only"],
+      ["stand", "Stand / feet"],
+      ["case", "Fitted case / enclosure"],
+    ]
+      .map(
+        (v) =>
+          `<option value="${v[0]}" ${settings.support === v[0] ? "selected" : ""}>${v[1]}</option>`,
+      )
+      .join("")}</select></label>${field("fitClearance", "Panel fit clearance / side", 0.05, 2, 0.05)}${field("supportWall", "Wall / retaining thickness", 1, 6, 0.1)}${field("printGap", "Print spacing", 2, 50, 1)}${settings.shape !== "box" ? field("boxDepth", "Case / enclosure depth", 15, 100, 1) : ""}<p class="hint" id="support-size">Frame follows panel dimensions automatically.</p><p class="hint">Lighting enclosures live under Light. Optional rings, stands and clips appear below when this tab is open.</p>`;
+  }
+  if (activeTab === "light") {
+    html = lightingPanel(settings, field);
+  }
   $("#settings-panel").innerHTML = html;
-  if (activeTab === "image") $('[data-setting="text"]').value = settings.text;
-  mountStudio?.show(activeTab === "supports");
-  if (activeTab === "supports") schedule();
-  photoLibrary?.show(activeTab === "photos");
-  $("#export").innerHTML =
-    settings.colorMode === "cmyw"
-      ? "Export CMYW kit"
-      : `${icon("download")} Export STL`;
-  refreshIcons();
+  if (activeTab === "image") {
+    $('[data-setting="text"]').value = settings.text;
+    const thumb = $("#photo-thumb-inspector");
+    if (thumb && imageSource) thumb.src = imageSource;
+    const name = $("#filename-inspector");
+    if (name) {
+      name.textContent = filename;
+      name.title = filename;
+    }
+  }
+  mountStudio?.show(activeTab === "frame");
+  if (activeTab === "frame") schedule();
+  photoLibrary?.show(activeTab === "image" && photosExpanded);
+  syncPrintModeUI();
 }
+
 function openPanel(tab) {
-  activeTab = tab;
+  const aliases = {
+    model: "size",
+    print: "size",
+    supports: "frame",
+    photos: "image",
+  };
+  activeTab = aliases[tab] || tab;
+  if (tab === "photos" || tab === "image") {
+    if (tab === "photos") photosExpanded = true;
+  }
+  if (tab === "print") {
+    // Focus advanced print options after render
+  }
+  if (tab === "supports") {
+    // Frame hosts matching supports; light setups use Light tab
+  }
   document
-    .querySelectorAll("[data-tab]")
-    .forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+    .querySelectorAll(".settings-tabs [data-tab]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.tab === activeTab));
   renderSettings();
+  if (tab === "print") {
+    const details = $("#settings-panel details.advanced-block");
+    if (details) details.open = true;
+  }
+  if (tab === "photos") {
+    photosExpanded = true;
+    photoLibrary?.show(true);
+    const disclosure = $("#photos-disclosure");
+    if (disclosure) disclosure.open = true;
+  }
 }
+
 function toast(message, error = false) {
   const t = $("#toast");
   t.textContent = message;
@@ -268,7 +535,9 @@ async function withBusy(action) {
   $(".workspace").inert = true;
   $("#busy-indicator").hidden = false;
   document
-    .querySelectorAll(".export-button,#export-top,#export-kit")
+    .querySelectorAll(
+      ".export-button,#export-top,#export-kit,#export-3mf,#export-color,#export-color-modal,#export-review-stl,#export-review-3mf,#export-review-kit",
+    )
     .forEach((b) => (b.disabled = true));
   try {
     await action();
@@ -281,13 +550,58 @@ async function withBusy(action) {
     $(".workspace").inert = false;
     $("#busy-indicator").hidden = true;
     document
-      .querySelectorAll(".export-button,#export-top,#export-kit")
+      .querySelectorAll(
+        ".export-button,#export-top,#export-kit,#export-3mf,#export-color,#export-color-modal,#export-review-stl,#export-review-3mf,#export-review-kit",
+      )
       .forEach((b) => (b.disabled = false));
   }
 }
 function notes(s, stats) {
   return `MAKE MY LITHOPHANE\nDimensions: millimeters. STL has no embedded units.\nShape: ${s.shape}\nResolution: ${s.resolutionMode === "image" ? "Native photo pixels" : s.resolution + " mm"}\nWall thickness: ${s.min}–${s.max} mm\nMesh triangles: ${stats.triangles}\nApproximate solid PLA mass: ${stats.grams.toFixed(1)} g (1.24 g/cm³)\n\nInspect orientation, dimensions, supports and disconnected pieces in your slicer. White PLA, 0.12 mm layers and 100% infill are starting points, not printer-specific validated settings. Upright panels usually need a brim. Spheres and curved shapes may need supports. Use low-heat LEDs.\n\n${s.colorMode === "painting" ? `Experimental grayscale painting: print flat with image facing up. Layer height ${s.layer} mm. Suggested band heights (round to your slicer layers): ${Array.from({ length: s.levels }, (_, i) => (Math.round((s.min + (i * (s.max - s.min)) / (s.levels - 1)) / s.layer) * s.layer).toFixed(2)).join(", ")} mm. Assign dark-to-light grayscale filaments from lowest to highest band. This is not calibrated color matching.\n` : ""}\nBacklit preview is illustrative. Moon relief is procedural. No hardware-specific mounts.\n`;
 }
+
+function exportPartsSummary(s) {
+  const parts = ["Lithophane model"];
+  const d = supportDimensions(s);
+  if (d.type === "case") parts.push("Enclosure / case");
+  if (d.type === "stand") parts.push("Stand / feet");
+  if (d.type === "lighting") parts.push("Lighting housing parts");
+  if (s.colorMode === "cmyw")
+    parts.push("Cyan", "Magenta", "Yellow", "White", "Predicted preview");
+  if (s.colorMode === "paper" && ["flat", "box"].includes(s.shape))
+    parts.push("1:1 color backing sheet");
+  if (mountStudio?.getMesh()) parts.push("Optional hardware");
+  return parts;
+}
+
+function renderExportReview() {
+  const s = settings;
+  const modeLabel =
+    s.colorMode === "cmyw"
+      ? "CMYW Color"
+      : s.colorMode === "paper"
+        ? "Color paper"
+        : "Mono (white filament)";
+  const parts = exportPartsSummary(s);
+  $("#export-review-body").innerHTML = `
+    <dl class="review-grid">
+      <div><dt>Product</dt><dd>${shapeLabel(s.shape)}</dd></div>
+      <div><dt>Color mode</dt><dd>${modeLabel}</dd></div>
+      <div><dt>Size</dt><dd>${s.width} × ${["sphere", "moon"].includes(s.shape) ? s.width : s.height} mm</dd></div>
+      <div><dt>Formats</dt><dd>STL · 3MF · Project kit (.zip)${s.colorMode === "cmyw" ? " · CMYW kit" : ""}</dd></div>
+    </dl>
+    <div class="panel-title">Included parts</div>
+    <ul class="review-parts">${parts.map((p) => `<li>${p}</li>`).join("")}</ul>`;
+  const modalColor = $("#export-color-modal");
+  if (modalColor) modalColor.hidden = s.colorMode !== "cmyw";
+  refreshIcons();
+}
+
+function openExportReview() {
+  renderExportReview();
+  $("#export-modal").showModal();
+}
+
 async function exportModel(kit = false) {
   await withBusy(async () => {
     if (settings.colorMode === "cmyw") {
@@ -371,6 +685,13 @@ async function setPhoto(src, name) {
   $("#photo-thumb").src = src;
   $("#filename").textContent = name;
   $("#filename").title = name;
+  const inspectorThumb = $("#photo-thumb-inspector");
+  if (inspectorThumb) inspectorThumb.src = src;
+  const inspectorName = $("#filename-inspector");
+  if (inspectorName) {
+    inspectorName.textContent = name;
+    inspectorName.title = name;
+  }
   schedule(true);
 }
 async function importPhoto(file) {
@@ -389,6 +710,21 @@ async function importPhoto(file) {
   await setPhoto(src, file.name);
   toast("Photo loaded locally.");
 }
+
+function setColorMode(mode) {
+  if (mode === "painting") return;
+  settings.colorMode = mode;
+  if (mode !== "mono") {
+    preview.setMode("light");
+    document
+      .querySelectorAll("[data-view]")
+      .forEach((b) => b.classList.toggle("active", b.dataset.view === "light"));
+  }
+  syncPrintModeUI();
+  renderSettings();
+  schedule();
+}
+
 document.addEventListener("input", (event) => {
   const el = event.target,
     k = el.dataset.setting;
@@ -407,6 +743,7 @@ document.addEventListener("input", (event) => {
       .querySelectorAll("[data-view]")
       .forEach((b) => b.classList.toggle("active", b.dataset.view === "light"));
   }
+  if (k === "colorMode") syncPrintModeUI();
   if (
     k === "lightingSetup" ||
     (k === "boardCount" && settings.lightingSetup === "modular")
@@ -428,6 +765,10 @@ document.addEventListener("change", (event) => {
     ].includes(event.target.dataset.setting)
   )
     renderSettings();
+  if (event.target.id === "photos-disclosure") {
+    photosExpanded = event.target.open;
+    photoLibrary?.show(photosExpanded && activeTab === "image");
+  }
 });
 document.addEventListener("click", async (event) => {
   const b = event.target.closest("button");
@@ -443,28 +784,23 @@ document.addEventListener("click", async (event) => {
       return;
     }
     if (b.dataset.shape) {
-      settings.shape = b.dataset.shape;
-      document
-        .querySelectorAll(".shape")
-        .forEach((x) => x.classList.toggle("selected", x === b));
-      $("#shape-title").textContent = shapes.find(
-        (x) => x[0] === settings.shape,
-      )[1];
-      renderSettings();
-      schedule(true);
+      selectShape(b.dataset.shape);
+      return;
+    }
+    if (b.dataset.printMode) {
+      setColorMode(b.dataset.printMode);
+      return;
     }
     if (b.dataset.tab) {
-      activeTab = b.dataset.tab;
-      document
-        .querySelectorAll("[data-tab]")
-        .forEach((x) => x.classList.toggle("active", x === b));
-      renderSettings();
+      openPanel(b.dataset.tab);
+      return;
     }
     if (b.dataset.view) {
       preview.setMode(b.dataset.view);
       document
         .querySelectorAll("[data-view]")
         .forEach((x) => x.classList.toggle("active", x === b));
+      return;
     }
     if (b.dataset.preset) {
       const values = {
@@ -476,9 +812,27 @@ document.addEventListener("click", async (event) => {
       renderSettings();
       schedule();
       toast("Filament thickness preset applied.");
+      return;
     }
     switch (b.id) {
+      case "change-type":
+      case "change-type-inline":
+        openTypeChooser();
+        break;
+      case "close-type-chooser":
+        $("#type-chooser").close();
+        typeChosen = true;
+        break;
+      case "export-top":
+      case "open-export-panel":
+        openExportReview();
+        break;
+      case "close-export-modal":
+        $("#export-modal").close();
+        break;
       case "export-3mf":
+      case "export-review-3mf":
+        if ($("#export-modal").open) $("#export-modal").close();
         await withBusy(async () => {
           status("Generating 3MF export…");
           if (settings.colorMode === "cmyw") {
@@ -505,20 +859,26 @@ document.addEventListener("click", async (event) => {
         });
         break;
       case "export-color":
+      case "export-color-modal":
+        if ($("#export-modal").open) $("#export-modal").close();
         await withBusy(async () => {
           await colorStudio.export();
           status("Export complete");
         });
         break;
       case "upload":
+      case "upload-inspector":
       case "add-photo":
         $("#image-file").click();
         break;
       case "export":
-      case "export-top":
+      case "export-review-stl":
+        if ($("#export-modal").open) $("#export-modal").close();
         await exportModel();
         break;
       case "export-kit":
+      case "export-review-kit":
+        if ($("#export-modal").open) $("#export-modal").close();
         await exportModel(true);
         break;
       case "save-project":
@@ -600,6 +960,14 @@ document.addEventListener("click", async (event) => {
       case "calibration-panel":
         await calibration();
         break;
+      case "library-open-inline":
+        photosExpanded = true;
+        photoLibrary?.show(true);
+        $("#library-open")?.click();
+        break;
+      case "color-studio-open":
+        openPanel("print");
+        break;
     }
   } catch (e) {
     toast(e.message, true);
@@ -640,16 +1008,11 @@ async function restoreProject(p) {
   const decoded = await loadImage(p.image);
   settings = next;
   image = decoded;
+  typeChosen = true;
+  if ($("#type-chooser").open) $("#type-chooser").close();
   await setPhoto(p.image, String(p.filename || "Project photo"));
   $("#project-name").value = String(p.name || "Untitled project");
-  document
-    .querySelectorAll(".shape")
-    .forEach((b) =>
-      b.classList.toggle("selected", b.dataset.shape === settings.shape),
-    );
-  $("#shape-title").textContent = shapes.find(
-    (x) => x[0] === settings.shape,
-  )[1];
+  $("#shape-title").textContent = shapeLabel(settings.shape);
   renderSettings();
   toast("Project restored.");
 }
@@ -746,13 +1109,15 @@ colorStudio = initAdvanced({
 });
 const colorShortcut = document.createElement("button");
 colorShortcut.id = "color-studio-open";
-colorShortcut.className = "guide-button";
+colorShortcut.className = "rail-btn";
+colorShortcut.type = "button";
+colorShortcut.title = "Color & print options";
+colorShortcut.innerHTML = `${icon("palette")}<span>Color</span>`;
 colorShortcut.onclick = () => openPanel("print");
-colorShortcut.textContent = "Color & print →";
-document.querySelector(".local-note").before(colorShortcut);
+$("#tool-anchors").prepend(colorShortcut);
 mountStudio = initMounts({
   getSettings: () => settings,
-  open: () => openPanel("supports"),
+  open: () => openPanel("frame"),
   changed: () => schedule(),
   saveFile,
   toast,
@@ -761,3 +1126,4 @@ renderSettings();
 refreshIcons();
 await setPhoto(demoImage(), filename);
 initPersistence({ serialize: projectData, restore: restoreProject, toast });
+openTypeChooser();

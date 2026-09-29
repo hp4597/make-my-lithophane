@@ -3,12 +3,21 @@ const assert = require("node:assert/strict"),
   fs = require("node:fs/promises"),
   path = require("node:path"),
   { unzipSync, strFromU8 } = require("fflate");
+const { softwareGl } = require("./electron-args.cjs");
+async function dismissChooser(page) {
+  if (await page.locator("#type-chooser").evaluate((d) => d.open))
+    await page.locator("#close-type-chooser").click();
+}
+async function chooseShape(page, shape) {
+  await page.locator("#change-type").click();
+  await page.locator(`#type-chooser [data-shape="${shape}"]`).click();
+}
 (async () => {
   const profile = await fs.mkdtemp(
     path.join(require("node:os").tmpdir(), "litho-lighting-"),
   );
   const app = await electron.launch({
-    args: [".", "--user-data-dir=" + profile],
+    args: [".", "--user-data-dir=" + profile, ...softwareGl],
   });
   try {
     const page = await app.firstWindow(),
@@ -17,6 +26,7 @@ const assert = require("node:assert/strict"),
     await page.waitForFunction(() =>
       document.querySelector("#status")?.textContent.includes("Preview ready"),
     );
+    await dismissChooser(page);
     async function update(action) {
       const before = await page
         .locator("#viewport")
@@ -37,7 +47,7 @@ const assert = require("node:assert/strict"),
       page.locator('[data-setting="resolutionMode"]').selectOption("spacing"),
     );
     await update(() => page.locator('[data-setting="resolution"]').fill("1"));
-    await page.locator('[data-tab="supports"]').click();
+    await page.locator('[data-tab="light"]').click();
     await update(() =>
       page.locator('[data-setting="lightingSetup"]').selectOption("modular"),
     );
@@ -81,10 +91,12 @@ const assert = require("node:assert/strict"),
       "nightlight",
       "box",
     ]) {
-      await update(() => page.locator(`[data-shape="${shape}"]`).click());
-      await page.locator('[data-tab="print"]').click();
-      await update(() =>
-        page.locator('[data-setting="colorMode"]').selectOption("cmyw"),
+      await update(async () => {
+        await chooseShape(page, shape);
+      });
+      await page.locator('[data-setting="colorMode"]').selectOption("cmyw");
+      await page.waitForFunction(
+        () => document.querySelector("#viewport").dataset.colorMode === "cmyw",
       );
       await page.locator("#export-color").click();
       await page.waitForFunction(
@@ -103,7 +115,7 @@ const assert = require("node:assert/strict"),
       await page.locator("#reset-view").click();
       await page.screenshot({ path: `test-results/lighting-${shape}.png` });
     }
-    await page.locator('[data-tab="supports"]').click();
+    await page.locator('[data-tab="light"]').click();
     await page.screenshot({ path: "test-results/lighting-sidebar.png" });
     assert.deepEqual(errors, []);
     console.log(
