@@ -11,10 +11,12 @@ export function initLibrary(api) {
   dialog.hidden = true;
   document.querySelector("#tool-panels").append(dialog);
   const button = document.createElement("button");
-  button.className = "guide-button";
+  button.className = "rail-btn";
+  button.type = "button";
   button.id = "library-open";
-  button.textContent = "Photo library & layouts →";
-  document.querySelector(".spaced").before(button);
+  button.title = "Photo library & layouts";
+  button.textContent = "Photos";
+  document.querySelector("#tool-anchors")?.append(button);
   function draw() {
     dialog.innerHTML = `<span class="eyebrow">PHOTO LIBRARY</span><div class="panel-title">Photo library & layouts</div><p>Keep up to eight photos in your project. Select one, arrange a collage, wrap a panorama around a lamp, or export individual panels.</p><div class="button-row"><button data-action="import">Add photos</button><button data-action="current">Add current photo</button></div><div id="gallery"></div><div class="field-row"><label class="field"><span>Layout</span><select id="layout"><option value="single">Current photo</option><option value="strip">Horizontal panorama</option><option value="grid">Photo grid</option></select></label><label class="field"><span>Gap (mm)</span><input id="photo-gap" type="number" min="0" max="20" value="${gap}"/></label></div><label class="range-field"><span>Gap brightness <output>${background}</output></span><input id="gap-brightness" type="range" min="0" max="1" step="0.05" value="${background}"/></label><p class="hint">Each image fills its cell. Image adjustments in the main editor apply to the whole composition. Drag ordering is replaced by the arrow buttons for precise placement.</p><div class="dialog-actions"><button data-action="batch">Export individual panels</button><button data-action="box">Four-sided light box</button></div><input id="library-files" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden/>`;
     dialog.querySelector("#layout").value = layout;

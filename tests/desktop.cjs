@@ -1,6 +1,14 @@
 const { _electron: electron } = require("@playwright/test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
+async function dismissChooser(page) {
+  if (await page.locator("#type-chooser").evaluate((d) => d.open))
+    await page.locator("#close-type-chooser").click();
+}
+async function chooseShape(page, shape) {
+  await page.locator("#change-type").click();
+  await page.locator(`#type-chooser [data-shape="${shape}"]`).click();
+}
 (async () => {
   const profile = await fs.mkdtemp(
     require("node:path").join(require("node:os").tmpdir(), "litho-test-"),
@@ -19,6 +27,26 @@ const fs = require("node:fs/promises");
           ?.textContent.includes("Preview ready"),
       { timeout: 30000 },
     );
+    await dismissChooser(page);
+    assert.ok(await page.locator("#type-chooser").count());
+    assert.ok(await page.locator("#change-type").isVisible());
+    assert.deepEqual(
+      await page.locator(".settings-tabs [data-tab]").allTextContents(),
+      ["Size", "Image", "Frame", "Light"],
+    );
+    await page.locator("#change-type").click();
+    const featured = await page
+      .locator("#featured-products [data-shape]")
+      .evaluateAll((els) => els.map((e) => e.dataset.shape));
+    assert.deepEqual(featured, [
+      "flat",
+      "curved",
+      "cylinder",
+      "lamp",
+      "nightlight",
+      "box",
+    ]);
+    await page.locator("#close-type-chooser").click();
     await page
       .locator('[data-setting="resolutionMode"]')
       .selectOption("spacing");
@@ -37,14 +65,13 @@ const fs = require("node:fs/promises");
       "box",
       "flat",
     ]) {
-      await page.locator(`[data-shape="${shape}"]`).click();
+      await chooseShape(page, shape);
       await page.waitForTimeout(450);
       await page.waitForFunction(() =>
         document.querySelector("#status").textContent.includes("Preview ready"),
       );
       assert.ok((await page.locator("#model-triangles").textContent()) !== "—");
     }
-    await page.locator('[data-tab="print"]').click();
     await page.locator('[data-setting="colorMode"]').selectOption("paper");
     await page.locator('[data-view="light"]').click();
     for (const shape of [
@@ -59,7 +86,7 @@ const fs = require("node:fs/promises");
       "nightlight",
       "box",
     ]) {
-      await page.locator(`[data-shape="${shape}"]`).click();
+      await chooseShape(page, shape);
       await page.waitForTimeout(400);
       await page.waitForFunction(() =>
         document.querySelector("#status").textContent.includes("Preview ready"),
@@ -71,16 +98,15 @@ const fs = require("node:fs/promises");
       );
     }
     await page.screenshot({ path: "test-results/color-backlit.png" });
-    await page.locator('[data-shape="flat"]').click();
-    await page.locator('[data-tab="model"]').click();
+    await chooseShape(page, "flat");
+    await page.locator('[data-tab="size"]').click();
     await page.locator('[data-setting="width"]').fill("160");
     await page.waitForTimeout(600);
-    await page.locator('[data-tab="supports"]').click();
+    await page.locator('[data-tab="frame"]').click();
     await page.waitForTimeout(600);
     assert.match(await page.locator("#support-size").textContent(), /128.0 mm/);
-    await page.locator('[data-tab="model"]').click();
+    await page.locator('[data-tab="size"]').click();
     await page.locator('[data-setting="width"]').fill("120");
-    await page.locator('[data-tab="print"]').click();
     await page.locator('[data-setting="colorMode"]').selectOption("mono");
     await page.locator('[data-tab="image"]').click();
     await page.locator('[data-setting="text"]').fill("Our favorite place");
@@ -88,13 +114,12 @@ const fs = require("node:fs/promises");
     await page.locator('[data-view="light"]').click();
     await page.waitForTimeout(600);
     await page.screenshot({ path: "test-results/backlit.png" });
-    await page.locator('[data-tab="model"]').click();
+    await page.locator('[data-tab="size"]').click();
     await page.locator('[data-setting="min"]').fill("5");
     await page.waitForTimeout(400);
     assert.match(await page.locator("#toast").textContent(), /thickness/);
     await page.locator('[data-setting="min"]').fill("0.8");
     await page.waitForTimeout(400);
-    // Exercise the actual sandbox bridge and native save IPC; redirect only the dialog.
     const path = require("node:path");
     const output = path.resolve("test-results/desktop-export.stl");
     await app.evaluate(({ dialog }, output) => {
@@ -103,6 +128,9 @@ const fs = require("node:fs/promises");
         filePath: output,
       });
     }, output);
+    await page.locator("#export-top").click();
+    assert.ok(await page.locator("#export-modal").evaluate((d) => d.open));
+    await page.locator("#close-export-modal").click();
     await page.locator("#export").click();
     await page.waitForFunction(
       () => document.querySelector("#status").textContent === "Export complete",
@@ -128,8 +156,7 @@ const fs = require("node:fs/promises");
       () =>
         document.querySelector("#toast").textContent === "Project restored.",
     );
-    await page.locator('[data-shape="box"]').click();
-    await page.locator('[data-tab="print"]').click();
+    await chooseShape(page, "box");
     await page.locator('[data-setting="colorMode"]').selectOption("paper");
     const kitPath = path.resolve("test-results/box-kit.zip");
     await app.evaluate(({ dialog }, output) => {
@@ -167,6 +194,7 @@ const fs = require("node:fs/promises");
         filePath: output,
       });
     }, calibrationPath);
+    await page.locator('[data-tab="size"]').click();
     await page.locator("#calibration-panel").click();
     await page.waitForFunction(() =>
       document.querySelector("#toast").textContent.startsWith("10 steps"),
@@ -179,7 +207,7 @@ const fs = require("node:fs/promises");
     await page.locator("#guide").click();
     assert.ok(await page.locator("#guide-modal").isVisible());
     await page.locator("#close-guide").click();
-    await page.locator('[data-tab="model"]').click();
+    await page.locator('[data-tab="size"]').click();
     await page.locator('[data-setting="width"]').fill("40");
     await page.locator('[data-setting="height"]').fill("30");
     await page.locator('[data-setting="resolution"]').fill("1");
@@ -319,7 +347,7 @@ const fs = require("node:fs/promises");
     );
     assert.deepEqual(errors, []);
     console.log(
-      `Desktop smoke test passed: 10 shapes, photo edits/import, validation, STL (${triangles} triangles), project save/open, ZIP enclosure kit, 1:1 SVG, calibration, gallery layout, painting WIP gate, CMYW assembly, mount kit. No renderer errors.`,
+      `Desktop smoke test passed: product chooser, Size/Image/Frame/Light, Mono/CMYW, 10 shapes, photo edits/import, validation, STL (${triangles} triangles), project save/open, ZIP enclosure kit, 1:1 SVG, calibration, gallery layout, painting WIP gate, CMYW assembly, mount kit. No renderer errors.`,
     );
   } finally {
     await app.close();

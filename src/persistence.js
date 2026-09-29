@@ -52,9 +52,11 @@ export function initPersistence(api) {
   });
   const button = document.createElement("button");
   button.id = "recover-project";
-  button.className = "guide-button";
-  button.textContent = "Restore local autosave →";
-  document.querySelector(".local-note").before(button);
+  button.className = "rail-btn";
+  button.type = "button";
+  button.title = "Restore local autosave";
+  button.textContent = "Recover";
+  document.querySelector("#tool-anchors")?.append(button);
   button.onclick = async () => {
     try {
       const saved = await read();

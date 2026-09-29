@@ -3,6 +3,10 @@ const assert = require("node:assert/strict"),
   path = require("node:path"),
   fs = require("node:fs/promises"),
   { unzipSync, strFromU8 } = require("fflate");
+async function dismissChooser(page) {
+  if (await page.locator("#type-chooser").evaluate((d) => d.open))
+    await page.locator("#close-type-chooser").click();
+}
 (async () => {
   const profile = await fs.mkdtemp(
     require("node:path").join(require("node:os").tmpdir(), "litho-test-"),
@@ -21,6 +25,7 @@ const assert = require("node:assert/strict"),
     await page.waitForFunction(() =>
       document.querySelector("#status")?.textContent.includes("Preview ready"),
     );
+    await dismissChooser(page);
     async function update(action) {
       const before = await page
         .locator("#viewport")
@@ -43,7 +48,6 @@ const assert = require("node:assert/strict"),
       page.locator('[data-setting="resolutionMode"]').selectOption("spacing"),
     );
     await update(() => page.locator('[data-setting="resolution"]').fill("1"));
-    await page.locator('[data-tab="print"]').click();
     await update(() =>
       page.locator('[data-setting="colorMode"]').selectOption("cmyw"),
     );
@@ -61,7 +65,7 @@ const assert = require("node:assert/strict"),
       await page.locator("#viewport").getAttribute("data-color-mode"),
       "mono",
     );
-    await page.locator('[data-tab="supports"]').click();
+    await page.locator('[data-tab="frame"]').click();
     await update(() =>
       page.locator('[data-setting="support"]').selectOption("case"),
     );
@@ -76,7 +80,6 @@ const assert = require("node:assert/strict"),
     await page.locator("#reset-view").click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: "test-results/live-supports.png" });
-    await page.locator('[data-tab="print"]').click();
     await update(() =>
       page.locator('[data-setting="colorMode"]').selectOption("cmyw"),
     );
@@ -124,7 +127,8 @@ const assert = require("node:assert/strict"),
     assert.match(modelXML, /Cyan/);
     assert.match(modelXML, /Matching stand/);
     assert.match(modelXML, /Optional hardware/);
-    await page.locator('[data-tab="photos"]').click();
+    await page.locator('[data-tab="image"]').click();
+    await page.locator("#library-open").click();
     await page.locator('#photo-library [data-action="current"]').click();
     await update(() => page.locator("#layout").selectOption("grid"));
     await page.screenshot({ path: "test-results/live-photos.png" });
@@ -134,7 +138,7 @@ const assert = require("node:assert/strict"),
     assert.equal(await page.locator("#viewport canvas").count(), 1);
     assert.deepEqual(errors, []);
     console.log(
-      "Live panel passed: no settings dialogs, live CMYW and support changes, stale preview protection, persistent hardware and matching multipart export, live photo layout.",
+      "Live panel passed: product shell, live CMYW and frame changes, stale preview protection, persistent hardware and matching multipart export, live photo layout.",
     );
   } finally {
     await app.close();

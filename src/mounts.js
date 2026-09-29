@@ -150,10 +150,12 @@ export function initMounts(api) {
   document.querySelector("#tool-panels").append(panel);
   const button = document.createElement("button");
   button.id = "mount-open";
-  button.className = "guide-button";
-  button.textContent = "Supports & hardware →";
+  button.className = "rail-btn";
+  button.type = "button";
+  button.title = "Frame & hardware";
+  button.textContent = "Hardware";
   button.onclick = () => api.open();
-  document.querySelector(".local-note").before(button);
+  document.querySelector("#tool-anchors")?.append(button);
   let type = "spider",
     enabled = false,
     p = {

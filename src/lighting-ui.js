@@ -3,15 +3,15 @@ export function lightingPanel(s, field) {
     `<label class="field"><span>${label}</span><select data-setting="${key}">${options.map(([v, n]) => `<option value="${v}" ${String(s[key]) === String(v) ? "selected" : ""}>${n}</option>`).join("")}</select></label>`;
   const check = (key, label) =>
     `<label class="field"><span><input type="checkbox" data-setting="${key}" ${s[key] ? "checked" : ""}> ${label}</span></label>`;
-  let html = `<div class="panel-title">Lighting & enclosure</div>${select(
+  let html = `<div class="panel-title">Light source</div>${select(
     "lightingSetup",
     "Setup",
     [
-      ["none", "No lighting enclosure"],
-      ["modular", "Modular board / 3-size frame"],
-      ["fixed", "Fixed backlight board frame"],
-      ["strip", "LED-strip lightbox"],
-      ["custom", "Custom light attachment"],
+      ["none", "None"],
+      ["modular", "Modular board"],
+      ["fixed", "Fixed board"],
+      ["strip", "LED strip"],
+      ["custom", "Socket / custom"],
     ],
   )}<p class="hint">Works with mono and CMYW. Flat, curved, cylinder, lamp shade, night light and lightbox are the priority shapes.</p>`;
   if (s.lightingSetup === "none") return html;

@@ -17,6 +17,8 @@ const { Unzip, UnzipInflate } = require("fflate");
     await page.waitForFunction(() =>
       document.querySelector("#status")?.textContent.includes("Preview ready"),
     );
+    if (await page.locator("#type-chooser").evaluate((d) => d.open))
+      await page.locator("#close-type-chooser").click();
     const png = await page.evaluate(() => {
       const c = document.createElement("canvas");
       c.width = 1672;
@@ -46,9 +48,8 @@ const { Unzip, UnzipInflate } = require("fflate");
         .querySelector("#export-spacing")
         .textContent.includes("1672 x 941"),
     );
-    await page.locator('[data-tab="supports"]').click();
+    await page.locator('[data-tab="light"]').click();
     await page.locator('[data-setting="lightingSetup"]').selectOption("strip");
-    await page.locator('[data-tab="print"]').click();
     await page.locator('[data-setting="colorMode"]').selectOption("cmyw");
     await page.waitForFunction(
       () => document.querySelector("#viewport").dataset.colorMode === "cmyw",

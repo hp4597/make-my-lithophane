@@ -19,6 +19,8 @@ const assert = require("node:assert/strict"),
     await page.waitForFunction(() =>
       document.querySelector("#status")?.textContent.includes("Preview ready"),
     );
+    if (await page.locator("#type-chooser").evaluate((d) => d.open))
+      await page.locator("#close-type-chooser").click();
     assert.equal(
       await page.locator('[data-setting="resolutionMode"]').inputValue(),
       "image",
@@ -27,9 +29,9 @@ const assert = require("node:assert/strict"),
       await page.locator("#export-spacing").textContent(),
       /1000 x 750/,
     );
-    await page.locator('[data-tab="supports"]').click();
+    await page.locator('[data-tab="frame"]').click();
     await page.locator('[data-setting="support"]').selectOption("none");
-    await page.locator('[data-tab="model"]').click();
+    await page.locator('[data-tab="size"]').click();
     await page.locator('[data-setting="width"]').fill("160");
     await page.waitForTimeout(1000);
     assert.match(

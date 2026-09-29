@@ -27,12 +27,13 @@ For a terminal or CI run without a final keypress: `build-distribution.bat --no-
 
 ## Workflow
 
-1. Import a PNG, JPEG or WebP, or drag it onto the app.
-2. Choose a shape and dimensions in millimeters. Sphere/cylinder dimensions use the **inner** diameter; thickness increases the outer diameter.
-3. Adjust image fit, zoom, position, rotation, mirror, brightness, contrast, gamma, inversion or caption.
-4. Inspect solid, illustrative backlit, or wireframe preview.
-5. Export a binary STL, or a ZIP kit containing STL, a self-contained project and printing notes. Light-box kits also include a separate enclosure. Flat color-paper kits contain a 1:1 SVG backing.
-6. Open the STL in your slicer; verify scale, orientation, islands, supports, and print settings before printing.
+1. Choose a lithophane type from the product chooser (or **Change type** later).
+2. Import a PNG, JPEG or WebP, or drag it onto the app.
+3. Use the **Size**, **Image**, **Frame** and **Light** inspector tabs for dimensions, photo edits, mounts/enclosures and lighting.
+4. Switch **Mono** / **CMYW Color** from the top bar (color paper remains under More).
+5. Inspect Solid, Backlit, or Mesh preview.
+6. Open **Export** for a review summary, or export STL / 3MF / project kit directly from the inspector.
+7. Open the STL in your slicer; verify scale, orientation, islands, supports, and print settings before printing.
 
 Save/open `.litho` project files to retain the original image and all settings. Ctrl+S saves a project. Native mode matches image pixel dimensions; Custom spacing controls millimeters per sample. Backlit image textures retain source resolution while interactive geometry uses a separate budget. PLA mass is based on solid geometry at 1.24 g/cm³, excluding supports and brim.
 
@@ -104,15 +105,15 @@ Backlit 3D uses a native-resolution image texture rather than interpolating colo
 
 ## Version 0.5: one live workspace
 
-Color, matching stands/cases, optional hardware and photo layouts now live in the right sidebar. **Color & print** selects white filament, color paper or CMYW and exposes layer height/color depth directly. The existing viewport updates automatically; color selection switches to Backlit. Later edits preserve the current view and camera. CMYW preview uses the total material thickness and predicted transmission, and matching supports follow that thickness. CMYW material exports support the six priority shapes. Filament painting remains disabled.
+Color, matching stands/cases, optional hardware and photo layouts remain live in the right inspector. Phase 1 reorganizes navigation into **Size / Image / Frame / Light**, with Mono/CMYW on the top bar and multi-photo tools under Image. Filament painting remains disabled.
 
-**Supports** contains automatic matching supports and optional manual hardware dimensions. Enabling hardware displays it beside the photo; it no longer replaces the photo. Enabled hardware joins standard STL/3MF layouts and appears in CMYW kits/layouts. **Photos** contains the library, layout, gap and background controls; edits apply live without an Apply button. File dialogs and the help guide remain dialogs.
+**Frame** contains automatic matching supports and optional manual hardware dimensions. Enabling hardware displays it beside the photo; it no longer replaces the photo. Enabled hardware joins standard STL/3MF layouts and appears in CMYW kits/layouts. **Image → Multi-photo library** contains the library, layout, gap and background controls; edits apply live without an Apply button. File dialogs, the type chooser, export review and the help guide remain dialogs.
 
 `npm run test:live` checks live color/support/layout changes, rapid-edit stale-result protection and matching exported parts. Project files preserve the unified settings and hardware visibility.
 
 ## Lighting enclosures (0.6)
 
-Use **Supports → Lighting & enclosure**. Setup choices mirror the reference families: no enclosure, modular board / three-size frame, fixed board frame, LED-strip lightbox, and custom attachment. They share the live mono/CMYW color setting; no popup is needed. The six priority shapes appear first in the shape list.
+Use **Light**. Setup choices mirror the reference families: none, modular board, fixed board, LED strip, and socket/custom. They share the live mono/CMYW color setting; no popup is needed. The six priority shapes appear first in the type chooser.
 
 - Flat panel and lightbox: adjustable enclosure frame, removable rear cover, panel seat, front retainer, PCB edge trays / strip trays / puck recess / socket collar.
 - Curved panel and night light: curved rear shell, end walls, lower and optional upper cap, flexible-strip guides.
