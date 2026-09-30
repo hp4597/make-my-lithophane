@@ -1,3 +1,5 @@
+import { isSolid } from "./solid-settings.js";
+import { solidLithophane } from "./solid-color.js";
 import { buildMesh, defaults } from "./geometry.js";
 
 export const starterFilaments = [
@@ -209,6 +211,7 @@ export function volumeBetween(
   };
 }
 export function colorLithophane(rgba, nx, ny, s, predictionOnly = false) {
+  if (isSolid(s)) return solidLithophane(rgba, nx, ny, s, predictionOnly);
   const n = (nx + 1) * (ny + 1),
     channels = [new Float32Array(n), new Float32Array(n), new Float32Array(n)],
     white = new Float32Array(n);
@@ -275,8 +278,8 @@ export function cmywPreviewMesh(parts, nx, ny, s) {
   }
   max = Math.max(max, min + 0.001);
   const scale = Math.max(1, Math.sqrt((nx * ny) / 600000)),
-    px = Math.max(4, Math.floor(nx / scale)),
-    py = Math.max(4, Math.floor(ny / scale));
+    px = isSolid(s) ? 4 : Math.max(4, Math.floor(nx / scale)),
+    py = isSolid(s) ? 4 : Math.max(4, Math.floor(ny / scale));
   const pixels = new Float32Array((px + 1) * (py + 1));
   for (let y = 0; y <= py; y++)
     for (let x = 0; x <= px; x++)

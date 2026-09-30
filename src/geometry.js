@@ -1,7 +1,9 @@
-export const COLOR_EXPORT_CELL_LIMIT = 4000000;
+import { isSolid } from "./solid-settings.js";
+import { solidDefaults, solidConfig } from "./solid-settings.js";
 import { lightingDefaults, validateLighting } from "./lighting-settings.js";
 export const defaults = {
   ...lightingDefaults,
+  ...solidDefaults,
   shape: "flat",
   support: "auto",
   fitClearance: 0.2,
@@ -58,6 +60,9 @@ export const shapes = [
 ];
 export function validate(s) {
   validateLighting(s);
+  if (!["relief", "solid", "dedicated"].includes(s.colorStructure))
+    throw new Error("Unknown color structure.");
+  if (s.colorMode === "cmyw" && isSolid(s)) solidConfig(s);
   for (const k of Object.keys(defaults))
     if (typeof defaults[k] === "number" && !Number.isFinite(s[k]))
       throw new Error(`${k} must be a number.`);
@@ -85,20 +90,20 @@ export function validate(s) {
   )
     throw new Error("A fitted stand requires a rectangular panel.");
   if (!shapes.some(([id]) => id === s.shape)) throw new Error("Unknown shape.");
-  if (s.width < 20 || s.width > 500 || s.height < 20 || s.height > 500)
-    throw new Error("Dimensions must be between 20 and 500 mm.");
+  if (s.width < 20 || s.height < 20)
+    throw new Error("Dimensions must be at least 20 mm.");
   if (
     s.min < (s.colorMode === "cmyw" ? 0.04 : 0.4) ||
     s.max <= s.min ||
-    s.max > (s.colorMode === "cmyw" ? 20 : 10)
+    (!(s.colorMode === "cmyw" && isSolid(s)) &&
+      s.max > (s.colorMode === "cmyw" ? 20 : 10))
   )
     throw new Error(
       "Maximum thickness must exceed minimum thickness (0.4–10 mm).",
     );
   if (!["image", "spacing"].includes(s.resolutionMode))
     throw new Error("Unknown resolution mode.");
-  if (s.resolution < 0.01 || s.resolution > 2)
-    throw new Error("Resolution must be 0.01–2 mm.");
+  if (s.resolution <= 0) throw new Error("Sample spacing must be positive.");
   if (s.border < 0 || s.border >= Math.min(s.width, s.height) / 3)
     throw new Error("Border is too large for this panel.");
   if (s.angle < 10 || s.angle > 300 || s.taper < 0.3 || s.taper > 1.5)
@@ -167,7 +172,7 @@ export function validate(s) {
       "Hanging holes need a border at least 2 mm wider than the hole diameter.",
     );
 }
-export function gridSize(s, preview = false, source = null, limit = 4000000) {
+export function gridSize(s, preview = false, source = null) {
   let nx, ny;
   if (s.resolutionMode === "image") {
     if (!source || source.width < 2 || source.height < 2)
@@ -187,13 +192,21 @@ export function gridSize(s, preview = false, source = null, limit = 4000000) {
     nx = Math.max(4, Math.ceil(w / s.resolution));
     ny = Math.max(4, Math.ceil(h / s.resolution));
   }
+  if (
+    ![nx, ny, (nx + 1) * (ny + 1)].every(Number.isSafeInteger) ||
+    nx < 1 ||
+    ny < 1
+  )
+    throw new Error(
+      "Requested grid exceeds numeric precision. No downsampling was applied.",
+    );
   if (preview) {
     const scale = Math.max(1, Math.sqrt((nx * ny) / 600000));
     nx = Math.max(4, Math.floor(nx / scale));
     ny = Math.max(4, Math.floor(ny / scale));
-  } else if (nx * ny > limit)
+  } else if (2 * (nx + 1) * (ny + 1) > 0xffffffff)
     throw new Error(
-      `Requested ${nx + 1} x ${ny + 1} samples exceeds this export's ${limit.toLocaleString()}-cell memory limit. No downsampling was applied. Choose Custom spacing or a smaller image.`,
+      `Requested ${nx + 1} x ${ny + 1} samples cannot be represented by 32-bit mesh indices. No downsampling was applied.`,
     );
   return { nx, ny };
 }
@@ -451,6 +464,10 @@ export function buildMesh(s, pixels, nx, ny, rgba = null) {
 export function binarySTL(mesh) {
   const { positions: p, indices: i } = mesh,
     n = i.length / 3;
+  if (!Number.isSafeInteger(n) || n > 0xffffffff)
+    throw new Error(
+      "Triangle count cannot be represented by the binary STL format.",
+    );
   const out = new ArrayBuffer(84 + n * 50),
     v = new DataView(out);
   v.setUint32(80, n, true);

@@ -93,9 +93,6 @@ export async function executeBatch(
         onProgress(results.at(-1));
         continue;
       }
-      const stat = await fs.stat(job.input);
-      if (stat.size > 40 * 1024 * 1024)
-        throw new Error("Image exceeds the 40 MB input limit.");
       const bytes = await fs.readFile(job.input),
         ext = path.extname(job.input).toLowerCase(),
         mime =

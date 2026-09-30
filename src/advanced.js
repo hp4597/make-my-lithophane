@@ -1,4 +1,4 @@
-import { gridSize, COLOR_EXPORT_CELL_LIMIT } from "./geometry.js";
+import { gridSize } from "./geometry.js";
 import { starterFilaments, paletteForStack } from "./color.js";
 import { sampleImage } from "./image.js";
 export function predictionCanvas(result) {
@@ -37,12 +37,17 @@ export function initAdvanced(api) {
       j.reject(new Error("Color generation failed."));
     jobs.clear();
   };
-  async function process(settings, source, preview, format = "kit") {
+  async function process(
+    settings,
+    source,
+    preview,
+    format = "kit",
+    calibration = false,
+  ) {
     const { nx, ny } = gridSize(
       preview ? { ...settings, resolutionMode: "image" } : settings,
       false,
       source,
-      preview ? 16000000 : COLOR_EXPORT_CELL_LIMIT,
     );
     const canvas = sampleImage(source, settings, nx, ny, true),
       rgba = canvas.getContext("2d").getImageData(0, 0, nx + 1, ny + 1).data,
@@ -59,6 +64,7 @@ export function initAdvanced(api) {
         {
           id,
           format,
+          calibration,
           targetPNG,
           project: preview ? null : api.getProject(),
           settings,
@@ -99,6 +105,25 @@ export function initAdvanced(api) {
         pendingPreview = { s, source, resolve, reject };
         pumpPreview();
       }),
+    calibration: async () => {
+      const s = {
+        ...api.getSettings(),
+        shape: "flat",
+        width: 36,
+        height: 36,
+        colorMode: "cmyw",
+        colorStructure:
+          api.getSettings().colorStructure === "dedicated"
+            ? "dedicated"
+            : "solid",
+        support: "none",
+        lightingSetup: "none",
+        resolutionMode: "spacing",
+        resolution: 2,
+      };
+      const result = await process(s, api.getImage(), false, "kit", true);
+      await api.saveFile("solid-color-calibration.zip", result.bytes);
+    },
     export: async (format = "kit") => {
       const s = { ...api.getSettings() };
       if (

@@ -13,6 +13,17 @@ import {
 function image(nx, ny, value = 0.5) {
   return new Float32Array((nx + 1) * (ny + 1)).fill(value);
 }
+test("Large panels retain physical dimensions and native detail", () => {
+  const s = { ...defaults, width: 900, height: 360, support: "none" };
+  validate(s);
+  assert.deepEqual(gridSize(s, false, { width: 1672, height: 941 }), {
+    nx: 1671,
+    ny: 940,
+  });
+  const mesh = buildMesh(s, image(8, 6), 8, 6);
+  assert.ok(Math.abs(meshStats(mesh).dimensions[0] - 900) < 0.001);
+  assert.throws(() => validate({ ...s, width: Infinity }), /number/);
+});
 function topology(m) {
   const edges = new Map();
   let volume = 0;

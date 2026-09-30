@@ -65,7 +65,7 @@ Precedence: built-in defaults, then the settings file, then command-line overrid
 - Directory scans skip symbolic links and the designated output subfolder. Explicit symbolic-link inputs are rejected. Unrelated file types in folders are ignored; unsupported explicit files are rejected.
 - `--dry-run` validates settings and lists planned/skipped targets without decoding images or creating output directories.
 - Invalid images are reported and the batch continues. `--fail-fast` stops after the first processing error. Ctrl+C interrupts; previously completed models remain available.
-- Inputs are limited to 40 MB and 100 megapixels. Existing geometry limits apply, and individual image processing times out after 120 seconds. A timeout disables the renderer for the remaining jobs, which are reported as failed promptly.
+- Inputs have no fixed file-size or megapixel ceiling. Available memory, image-decoder/canvas capabilities and mesh-format constraints still apply. Individual image processing times out after 120 seconds. A timeout disables the renderer for the remaining jobs, which are reported as failed promptly.
 - `--json` emits one JSON object containing effective settings, input/output paths, statuses, counts, file sizes and model statistics. Diagnostics from the runtime may appear on stderr. JSON has no progress chatter on stdout.
 
 Exit codes: **0** success/planned/skipped, **1** one or more image-processing failures, **2** invalid arguments/settings or setup failure, **130** interruption through the launcher.

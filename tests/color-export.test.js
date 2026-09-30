@@ -1,17 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { unzipSync, strFromU8 } from "fflate";
-import {
-  defaults,
-  buildMesh,
-  binarySTL,
-  gridSize,
-  COLOR_EXPORT_CELL_LIMIT,
-} from "../src/geometry.js";
-import { exportArchive } from "../src/export-archive.js";
+import { defaults, buildMesh, binarySTL, gridSize } from "../src/geometry.js";
+import { exportArchive, checkZipSize } from "../src/export-archive.js";
 import { colorLayout } from "../src/color-layout.js";
 import { colorLithophane } from "../src/color.js";
 import { threeMF } from "../src/three-mf.js";
+test("ZIP format bounds reject overflow rather than writing corrupt archives", () => {
+  checkZipSize(0xfffffffe);
+  assert.throws(() => checkZipSize(0xffffffff), /format capacity/);
+  assert.throws(() => checkZipSize(2 ** 32), /format capacity/);
+});
 test("Chunked STL ZIP preserves the complete binary across chunk boundaries", () => {
   const m = buildMesh(defaults, new Float32Array(101 * 81).fill(0.4), 100, 80),
     zip = exportArchive();
@@ -21,25 +20,14 @@ test("Chunked STL ZIP preserves the complete binary across chunk boundaries", ()
   assert.deepEqual(files["panel.stl"], binarySTL(m));
   assert.equal(strFromU8(files["note.txt"]), "native");
 });
-test("Native screenshot dimensions pass the shared color export budget", () => {
-  const g = gridSize(
-    defaults,
-    false,
-    { width: 1672, height: 941 },
-    COLOR_EXPORT_CELL_LIMIT,
-  );
+test("Native color grid has no arbitrary pixel ceiling", () => {
+  const g = gridSize(defaults, false, { width: 1672, height: 941 });
   assert.equal(g.nx, 1671);
   assert.equal(g.ny, 940);
-  assert.throws(
-    () =>
-      gridSize(
-        defaults,
-        false,
-        { width: 3000, height: 2000 },
-        COLOR_EXPORT_CELL_LIMIT,
-      ),
-    /No downsampling/,
-  );
+  assert.deepEqual(gridSize(defaults, false, { width: 3000, height: 2000 }), {
+    nx: 2999,
+    ny: 1999,
+  });
 });
 test("Color print layout shares original material buffers and 3MF applies translation", () => {
   const s = { ...defaults, shape: "curved", lightingSetup: "strip" },

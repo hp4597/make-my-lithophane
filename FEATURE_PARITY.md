@@ -21,13 +21,17 @@ Not claimed: exact proprietary frame replicas, verified commercial snap fits, ev
 
 ## Implemented and covered by automated checks
 
+- Version 0.8: dedicated C/M/Y budgets for flat/lightbox solid panels, white-filled unused slots, calculated thickness and fitted supports, persisted live controls, calibration and export schedules. Tests verify exact per-cell coverage and only the assigned chromatic material plus white per panel layer. The default gives 4,913 candidate material combinations and a 4.16 mm panel with 51 physical layers (0.16 mm first, 0.08 mm thereafter). Physical color fidelity, absolute brightness and print-time savings remain unverified.
+
+- Version 0.7: experimental flat/lightbox constant-thickness CMYW panels, layer-aligned internal material allocation, white skins, explicit printable color grid, editable optical estimates, small-panel shortcut and a 36-patch calibration kit. Geometry tests cover exact material coverage, skin occupancy, layer boundaries and total volume. Bambu import/re-export preserves names/extruder hints, but global process settings require verification. Physical optical calibration, automatic measurement fitting, and curved solid panels are not implemented.
+
 - Version 0.6.1: native CMYW export budget raised to four million cells, chunked STL compression, shared material buffers for layout, worker-built complete kits and direct 3MF export.
 
 - Version 0.2.0 CLI: recursive photo batches, settings profiles, monochrome STL/3MF, dry run, no-clobber output, JSON reporting and exit codes. Desktop and CLI share image sampling and geometry.
 
 - Version 0.5: sidebar color/support/photo settings, live CMYW geometry and image, optional hardware preview alongside the model, shared export layouts and persisted settings.
 
-- Version 0.4: native image-resolution sampling, source-resolution backlit textures, higher-detail interactive geometry, native CMYW predictions, typed mesh buffers, and streamed 3MF XML. Explicit export memory limits remain.
+- Version 0.4: native image-resolution sampling, source-resolution backlit textures, higher-detail interactive geometry, native CMYW predictions, typed mesh buffers, and streamed 3MF XML. Fixed export-cell ceilings were removed in 0.7.1; actual platform and memory constraints remain.
 
 - Version 0.3: auto-sized stands/cases, separated print layouts, CMYW fitted supports, color-paper backlighting on all shapes, and quantized CMYW backlit prediction. Mechanical and optical results are not physically validated.
 
@@ -57,3 +61,9 @@ Not claimed: exact proprietary frame replicas, verified commercial snap fits, ev
 - Other desktop-version-specific tools or controls absent from the public documentation.
 
 Do not mark these complete based solely on similar-looking UI or successful mesh generation. Validate against the target desktop version, representative images, slicer behavior and physical prints.
+
+### Large models (0.7.1)
+
+Removed fixed 500 mm panel dimensions, export cell budgets, smooth color cell budget and photo file/pixel caps. Native export sampling is preserved; interactive geometry still uses a lighter mesh. Smooth export writes exact-sized typed buffers instead of growing JS arrays. Invalid settings hide the stale preview and clear its statistics until a valid update completes. RAM, graphics/image platform and mesh-format limits still apply. Automatic print-bed splitting is not implemented.
+
+Version 0.7.2 also removes smooth panel total-thickness, skin-thickness and 64-layer ceilings. Exact layer multiples and sufficient interior space remain required; the exhaustive color solver can consume substantial time and memory at large internal layer counts.
