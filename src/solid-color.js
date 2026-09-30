@@ -1,4 +1,8 @@
-import { solidConfig } from "./solid-settings.js";
+import {
+  solidConfig,
+  solidSettings,
+  dedicatedSchedule,
+} from "./solid-settings.js";
 const names = ["Cyan", "Magenta", "Yellow", "White"],
   colors = ["#00BCD4", "#DC267F", "#F2D53C", "#FFFFFF"];
 export function transmission(counts, s, config) {
@@ -35,9 +39,9 @@ function closest(node, rgb, best = { distance: Infinity, p: null }) {
 }
 function palette(s, c) {
   const points = [];
-  for (let a = 0; a <= c.inside; a++)
-    for (let b = 0; b <= c.inside - a; b++)
-      for (let d = 0; d <= c.inside - a - b; d++) {
+  for (let a = 0; a <= (c.budgets?.[0] ?? c.inside); a++)
+    for (let b = 0; b <= (c.budgets?.[1] ?? c.inside - a); b++)
+      for (let d = 0; d <= (c.budgets?.[2] ?? c.inside - a - b); d++) {
         const counts = [a, b, d, c.inside - a - b - d],
           expected = transmission(counts, s, c);
         points.push({ counts, expected, rgb: expected.map(Math.sqrt) });
@@ -115,6 +119,7 @@ export function solidMeshes(plan, s) {
           end++;
         let z = c.rear;
         for (let k = 0; k < 4; k++) {
+          if (c.budgets && k === 3) break;
           const n = counts[(y * cols + x) * 4 + k];
           box(
             builders[k],
@@ -126,6 +131,19 @@ export function solidMeshes(plan, s) {
             (z + n) * s.layer,
           );
           z += n;
+          if (c.budgets) {
+            const remaining = c.budgets[k] - n;
+            box(
+              builders[3],
+              (x / cols - 0.5) * w,
+              (end / cols - 0.5) * w,
+              (y / rows - 0.5) * h,
+              ((y + 1) / rows - 0.5) * h,
+              z * s.layer,
+              (z + remaining) * s.layer,
+            );
+            z += remaining;
+          }
         }
         x = end;
       }
@@ -225,7 +243,7 @@ export function solidLithophane(rgba, nx, ny, s, predictionOnly = false) {
   const plan = solidPlan(rgba, nx, ny, s),
     parts = predictionOnly ? [] : solidMeshes(plan, s),
     n = (nx + 1) * (ny + 1);
-  parts.heights = new Float32Array(n).fill(s.solidThickness);
+  parts.heights = new Float32Array(n).fill(plan.config.thickness);
   parts.expected = new Float32Array(n * 3);
   for (let y = 0; y <= ny; y++)
     for (let x = 0; x <= nx; x++) {
@@ -239,6 +257,11 @@ export function solidLithophane(rgba, nx, ny, s, predictionOnly = false) {
       );
     }
   parts.solidReport = {
+    structure: s.colorStructure,
+    thickness: plan.config.thickness,
+    colorLayers: plan.config.budgets,
+    combinations: plan.config.budgets?.reduce((a, n) => a * (n + 1), 1),
+    schedule: plan.config.budgets ? dedicatedSchedule(s) : undefined,
     grid: [plan.cols, plan.rows],
     pitch: [s.width / plan.cols, s.height / plan.rows],
     layers: plan.config.layers,
@@ -249,7 +272,7 @@ export function solidLithophane(rgba, nx, ny, s, predictionOnly = false) {
 }
 export function calibrationTile(s) {
   const settings = {
-      ...s,
+      ...solidSettings(s),
       shape: "flat",
       width: 36,
       height: 36,
@@ -265,7 +288,7 @@ export function calibrationTile(s) {
       let n = [0, 0, 0, c.inside],
         label;
       if (y < 3) {
-        n[y] = Math.round((c.inside * x) / 5);
+        n[y] = Math.round(((c.budgets?.[y] ?? c.inside) * x) / 5);
         n[3] -= n[y];
         label = names[y] + " ramp";
       } else if (y === 3) {
@@ -277,14 +300,19 @@ export function calibrationTile(s) {
           amount = Math.round(c.inside * (x % 2 ? 0.8 : 0.4));
         n[pair[0]] = Math.floor(amount / 2);
         n[pair[1]] = amount - n[pair[0]];
-        n[3] = c.inside - amount;
+        if (c.budgets)
+          for (const k of pair)
+            n[k] = Math.round(c.budgets[k] * (x % 2 ? 0.8 : 0.4));
+        n[3] = c.inside - n[0] - n[1] - n[2];
         label = "Mixed pair";
       } else if (y === 4) {
         const amount = Math.round((c.inside * x) / 5);
         n[0] = Math.floor(amount / 3);
         n[1] = Math.floor(amount / 3);
         n[2] = amount - n[0] - n[1];
-        n[3] = c.inside - amount;
+        if (c.budgets)
+          for (let k = 0; k < 3; k++) n[k] = Math.round((c.budgets[k] * x) / 5);
+        n[3] = c.inside - n[0] - n[1] - n[2];
         label = "Neutral mixture";
       } else {
         n = closest(lookup, [x / 5, x / 5, x / 5]).p.counts;
@@ -303,6 +331,7 @@ export function calibrationTile(s) {
   return { settings, parts: solidMeshes(plan, settings), patches };
 }
 export function whiteCoupons(s) {
+  s = solidSettings(s);
   const b = { p: [], i: [] },
     steps = [4, 8, 12, 16, 20, Math.round(s.solidThickness / s.layer)].map(
       (n) => n * s.layer,

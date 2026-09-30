@@ -1,3 +1,4 @@
+import { isSolid, solidSettings, dedicatedSchedule } from "./solid-settings.js";
 import { calibrationTile, whiteCoupons } from "./solid-color.js";
 import { exportArchive } from "./export-archive.js";
 import { colorLayout } from "./color-layout.js";
@@ -10,7 +11,8 @@ self.onmessage = async ({ data: d }) => {
   const reply = (body, transfers = []) =>
     self.postMessage({ ...body, id: d.id }, transfers);
   try {
-    const { nx, ny, rgba, settings: s } = d;
+    const { nx, ny, rgba } = d;
+    const s = solidSettings(d.settings);
     validate(s);
     if (d.calibration) {
       const tile = calibrationTile(s),
@@ -27,6 +29,11 @@ self.onmessage = async ({ data: d }) => {
       for (const p of tile.parts)
         archive.stl(p.name.toLowerCase() + ".stl", p.mesh);
       const coupons = whiteCoupons(s);
+      if (s.colorStructure === "dedicated")
+        archive.add(
+          "layer-schedule.json",
+          strToU8(JSON.stringify(dedicatedSchedule(s), null, 2)),
+        );
       archive.stl("white-thickness-coupons.stl", coupons.mesh);
       archive.add(
         "patches.json",
@@ -176,10 +183,7 @@ self.onmessage = async ({ data: d }) => {
       const options = {
         bambu: true,
         layer: s.layer,
-        firstLayer:
-          s.colorStructure === "solid"
-            ? Math.min(s.solidRear, 2 * s.layer)
-            : s.layer,
+        firstLayer: isSolid(s) ? Math.min(s.solidRear, 2 * s.layer) : s.layer,
       };
       if (d.format === "3mf") {
         const bytes = threeMF(combined, "CMYW with supports", options);
@@ -209,12 +213,25 @@ self.onmessage = async ({ data: d }) => {
       archive.add(
         "PRINTING.txt",
         strToU8(
-          s.colorStructure === "solid"
+          isSolid(s)
             ? `SMOOTH SOLID CMYW PANEL\nPrint the aligned multipart object flat. Use ${s.layer} mm layers, ${options.firstLayer} mm first layer and 100% infill. Assign Cyan/Magenta/Yellow/White to slots 1/2/3/4 and verify actual spool mapping. Bambu third-party imports can ignore global print-setting hints: explicitly check these values. A zero-use color can be absent. White skins cover the front and back; interior prisms tile without intended gaps. Read SOLID-PANEL.txt and print the calibration tile before a full photo. Optical coefficients and physical printing are unvalidated.\n`
             : `CMYW COLOR LITHOPHANE\nFour touching, non-overlapping volumes in millimeters. Open the 3MF as one multipart object, preserve part alignment and assign Cyan/Magenta/Yellow/White to corresponding extruders. Colors in the 3MF are descriptive; extruder assignment depends on your slicer.\nLayer height: ${s.layer} mm. Color thickness cap: ${s.colorDepth} mm plus one minimum layer. Orient the assembled material volumes together for your shape; curved and round models may need supports.\nThis uses an experimental optical-density separation, not a calibrated commercial palette. Every channel has a one-layer floor for closed geometry; this may tint whites. Print a small test and adjust material/color depth. The image belongs on the light-source side; view through the white layer.\n`,
         ),
       );
       if (parts.solidReport) {
+        if (s.colorStructure === "dedicated") {
+          const schedule = dedicatedSchedule(s);
+          archive.add(
+            "layer-schedule.json",
+            strToU8(JSON.stringify(schedule, null, 2)),
+          );
+          archive.add(
+            "DEDICATED-LAYERS.txt",
+            strToU8(
+              `DEDICATED COLOR LAYERS\nCyan + White: ${s.cyanLayers} slots; Magenta + White: ${s.magentaLayers}; Yellow + White: ${s.yellowLayers}. Bands print in C, M, Y order between white skins. Each image cell uses only its assigned color or white within each band.\nTotal thickness ${s.solidThickness} mm. ${schedule.length} physical print layers when first layer = ${options.firstLayer} mm and subsequent layers = ${s.layer} mm. Disable variable layer height and infill combination; use 100% infill and preserve multipart alignment. Verify filament mapping and process settings manually.\nSee layer-schedule.json for every physical layer's heights and allowed panel materials. Supports and the prime tower are not constrained by the panel schedule. Fewer materials per layer does not guarantee shorter travel or print time. Compare a small photo with the existing smooth mode in the slicer and under your backlight. Color prediction uses uncalibrated absorption and relative brightness.\n`,
+            ),
+          );
+        }
         archive.add(
           "SOLID-PANEL.json",
           strToU8(JSON.stringify(parts.solidReport, null, 2)),

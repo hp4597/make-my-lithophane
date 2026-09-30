@@ -1,6 +1,6 @@
 {
   "name": "make-my-lithophane",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Local photo-to-lithophane studio for Windows",
   "author": "Make My Lithophane",
   "private": true,
@@ -20,7 +20,8 @@
     "test:live": "npm run build && node tests/live-panel.cjs",
     "test:native-color": "npm run build && node tests/native-color-desktop.cjs",
     "test:native": "npm run build && node tests/native-desktop.cjs",
-    "test:cli": "npm run build && node tests/cli-desktop.cjs"
+    "test:cli": "npm run build && node tests/cli-desktop.cjs",
+    "test:dedicated": "npm run build && node tests/dedicated-desktop.cjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",

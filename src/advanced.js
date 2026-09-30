@@ -112,7 +112,10 @@ export function initAdvanced(api) {
         width: 36,
         height: 36,
         colorMode: "cmyw",
-        colorStructure: "solid",
+        colorStructure:
+          api.getSettings().colorStructure === "dedicated"
+            ? "dedicated"
+            : "solid",
         support: "none",
         lightingSetup: "none",
         resolutionMode: "spacing",

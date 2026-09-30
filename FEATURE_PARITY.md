@@ -21,6 +21,8 @@ Not claimed: exact proprietary frame replicas, verified commercial snap fits, ev
 
 ## Implemented and covered by automated checks
 
+- Version 0.8: dedicated C/M/Y budgets for flat/lightbox solid panels, white-filled unused slots, calculated thickness and fitted supports, persisted live controls, calibration and export schedules. Tests verify exact per-cell coverage and only the assigned chromatic material plus white per panel layer. The default gives 4,913 candidate material combinations and a 4.16 mm panel with 51 physical layers (0.16 mm first, 0.08 mm thereafter). Physical color fidelity, absolute brightness and print-time savings remain unverified.
+
 - Version 0.7: experimental flat/lightbox constant-thickness CMYW panels, layer-aligned internal material allocation, white skins, explicit printable color grid, editable optical estimates, small-panel shortcut and a 36-patch calibration kit. Geometry tests cover exact material coverage, skin occupancy, layer boundaries and total volume. Bambu import/re-export preserves names/extruder hints, but global process settings require verification. Physical optical calibration, automatic measurement fitting, and curved solid panels are not implemented.
 
 - Version 0.6.1: native CMYW export budget raised to four million cells, chunked STL compression, shared material buffers for layout, worker-built complete kits and direct 3MF export.

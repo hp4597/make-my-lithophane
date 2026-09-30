@@ -4,6 +4,9 @@ export const solidDefaults = {
   solidFront: 0.16,
   solidRear: 0.16,
   solidFeature: 0.4,
+  cyanLayers: 16,
+  magentaLayers: 16,
+  yellowLayers: 16,
   solidProfile: JSON.stringify({
     name: "Uncalibrated estimate",
     absorption: [
@@ -14,7 +17,49 @@ export const solidDefaults = {
     ],
   }),
 };
+export const isSolid = (s) => ["solid", "dedicated"].includes(s.colorStructure);
+export function solidSettings(s) {
+  if (s.colorStructure !== "dedicated") return s;
+  const budgets = [s.cyanLayers, s.magentaLayers, s.yellowLayers];
+  if (budgets.some((n) => !Number.isSafeInteger(n) || n < 1))
+    throw new Error(
+      "Dedicated color layer counts must be positive whole numbers.",
+    );
+  return {
+    ...s,
+    solidThickness: Number(
+      (
+        budgets.reduce((a, b) => a + b, 0) * s.layer +
+        s.solidFront +
+        s.solidRear
+      ).toFixed(8),
+    ),
+  };
+}
+export function dedicatedSchedule(s) {
+  s = solidSettings(s);
+  const c = solidConfig(s),
+    rows = [];
+  let z = 0;
+  const add = (n, allowedMaterials) => {
+    rows.push({
+      layer: rows.length + 1,
+      zBottom: Number((z * s.layer).toFixed(8)),
+      zTop: Number(((z + n) * s.layer).toFixed(8)),
+      allowedMaterials,
+    });
+    z += n;
+  };
+  add(Math.min(c.rear, 2), ["White"]);
+  while (z < c.rear) add(1, ["White"]);
+  for (let k = 0; k < 3; k++)
+    for (let i = 0; i < c.budgets[k]; i++)
+      add(1, [["Cyan", "Magenta", "Yellow"][k], "White"]);
+  for (let i = 0; i < c.front; i++) add(1, ["White"]);
+  return rows;
+}
 export function solidConfig(s) {
+  s = solidSettings(s);
   if (!["flat", "box"].includes(s.shape))
     throw new Error(
       "Smooth solid color panels currently support flat panels and lightboxes.",
@@ -81,6 +126,11 @@ export function solidConfig(s) {
       "Requested smooth color grid exceeds numeric precision. No detail was reduced.",
     );
   return {
+    thickness: s.solidThickness,
+    budgets:
+      s.colorStructure === "dedicated"
+        ? [s.cyanLayers, s.magentaLayers, s.yellowLayers]
+        : null,
     layers,
     front,
     rear,
